@@ -419,10 +419,98 @@ h1 {
   line-height: 1;
 }
 
-/* ─── CLIENTS & REFS ─────────────────────────────────────── */
-#clients { padding: 60px 0; }
+/* ─── EXPERIENCE TIMELINE ─────────────────────────────────── */
+.timeline {
+  display: flex;
+  flex-direction: column;
+}
 
-.clients-row,
+.timeline-item {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 0 36px;
+  padding: 32px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.timeline-item:last-child { border-bottom: none; }
+
+.timeline-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.timeline-date {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
+.timeline-type {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-pale);
+  padding: 2px 9px;
+  border-radius: 4px;
+  border: 1px solid #BAE6FD;
+  width: fit-content;
+}
+
+.timeline-body h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 3px;
+}
+
+.timeline-company {
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 12px !important;
+}
+
+.timeline-body > p:not(.timeline-company) {
+  font-size: .91rem;
+  color: var(--text-2);
+  line-height: 1.65;
+  margin-bottom: 14px;
+}
+
+.timeline-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.timeline-list li {
+  font-size: .9rem;
+  color: var(--text-2);
+  line-height: 1.55;
+  padding-left: 16px;
+  position: relative;
+}
+
+.timeline-list li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ─── SECTEURS & REFS ─────────────────────────────────────── */
+#referentiels { padding: 60px 0; }
+
+.sector-row,
 .refs-row {
   display: flex;
   flex-wrap: wrap;
@@ -430,7 +518,7 @@ h1 {
   margin-bottom: 16px;
 }
 
-.client-chip {
+.sector-chip {
   font-size: .9rem;
   font-weight: 700;
   padding: 8px 20px;
@@ -538,6 +626,18 @@ footer {
   .projects-grid,
   .cards-grid {
     grid-template-columns: 1fr;
+  }
+
+  .timeline-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .timeline-meta {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   h1 { font-size: 2.2rem; }
