@@ -5,8 +5,9 @@
   --ink-2:   #6B6B66;
   --rule:    #DAD6CC;
   --accent:  #D4501E;
-  --sans:    'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
-  --mono:    'IBM Plex Mono', 'Courier New', monospace;
+  --sans:    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --mono:    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color-scheme: light;
   /* type scale ×1.25 from 16 */
   --t-2xs: 0.512rem;
   --t-xs:  0.64rem;
@@ -17,6 +18,22 @@
   --t-2xl: 1.953rem;
   --t-3xl: 2.441rem;
   --t-4xl: 3.052rem;
+}
+
+/* ─── DARK THEME ─────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --paper:   #17150F;
+  --ink:     #EFEBE0;
+  --ink-2:   #94908A;
+  --rule:    #322F28;
+  --accent:  #E8632F;
+  color-scheme: dark;
+}
+
+/* smooth theme transition */
+*, *::before, *::after {
+  transition: background-color .3s ease, border-color .3s ease,
+              color .3s ease, fill .3s ease, stroke .3s ease;
 }
 
 /* ─── RESET ──────────────────────────────────────────────── */
@@ -108,6 +125,33 @@ img { display: block; max-width: 100%; }
   color: var(--ink-2);
   flex-shrink: 0;
 }
+
+.doc-header-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.theme-toggle {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  line-height: 0;
+}
+
+.theme-toggle:hover { color: var(--accent); }
+
+.theme-toggle .ico { width: 16px; height: 16px; }
+.theme-toggle .ico-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .ico-moon { display: none; }
+:root[data-theme="dark"] .theme-toggle .ico-sun  { display: block; }
 
 /* ─── MASTHEAD ───────────────────────────────────────────── */
 .masthead {
@@ -359,7 +403,7 @@ h1 {
   width: 100%;
   height: auto;
   display: block;
-  color: var(--rule);
+  color: var(--ink-2);
 }
 
 /* metadata col */
@@ -456,7 +500,7 @@ h1 {
 }
 
 .figure-svg {
-  color: var(--rule);
+  color: var(--ink-2);
   width: 100%;
 }
 
@@ -674,4 +718,6 @@ h1 {
   h1 { font-size: 2.2rem; }
   .proj-domain, .proj-year { display: none; }
   .doc-nav { gap: 20px; }
+  .doc-page { display: none; }
+  .doc-header-right { gap: 0; }
 }

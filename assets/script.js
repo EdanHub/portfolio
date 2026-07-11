@@ -1,3 +1,23 @@
+/* ─── THEME TOGGLE ───────────────────────────────────────── */
+(() => {
+  const root   = document.documentElement;
+  const toggle = document.querySelector('.theme-toggle');
+  if (!toggle) return;
+
+  toggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+
+  /* follow system changes only while user hasn't set a manual preference */
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+    if (!localStorage.getItem('theme')) {
+      root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+    }
+  });
+})();
+
 /* ─── PROJECT TABLE — ACCORDION ──────────────────────────── */
 document.querySelectorAll('.project-row').forEach(row => {
   const id      = row.dataset.id;
