@@ -68,10 +68,39 @@ img { display: block; max-width: 100%; }
   text-transform: uppercase;
   color: var(--ink-2);
   transition: color .15s;
+  position: relative;
+}
+
+.doc-nav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 1px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .25s ease;
 }
 
 .doc-nav a:hover,
 .doc-nav a.active { color: var(--accent); }
+
+.doc-nav a:hover::after,
+.doc-nav a.active::after { transform: scaleX(1); }
+
+.scroll-progress {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  pointer-events: none;
+}
 
 .doc-page {
   font-family: var(--mono);
@@ -245,7 +274,11 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
+  transition: transform .2s ease;
 }
+
+.project-row:hover .proj-title { transform: translateX(4px); }
+.project-row.open .proj-title  { transform: none; }
 
 .proj-arrow {
   font-family: var(--mono);
@@ -290,6 +323,18 @@ h1 {
 /* ─── PROJECT DETAIL PANEL ───────────────────────────────── */
 .project-detail { display: none; }
 .project-detail.open { display: table-row; }
+
+.project-detail.open .detail-inner,
+.project-detail.open .detail-figure-full {
+  animation: detail-in .4s ease both;
+}
+
+.project-detail.open .detail-figure-full { animation-delay: .1s; }
+
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
 
 .detail-cell {
   padding: 40px 0 48px 52px;
@@ -595,6 +640,9 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   .fade-in { transition: none; opacity: 1; transform: none; }
+  .project-detail.open .detail-inner,
+  .project-detail.open .detail-figure-full { animation: none; }
+  .proj-title, .doc-nav a::after { transition: none; }
 }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────── */

@@ -18,11 +18,12 @@ document.querySelectorAll('.project-row').forEach(row => {
   });
 });
 
-/* ─── ACTIVE NAV ON SCROLL ───────────────────────────────── */
+/* ─── ACTIVE NAV + SCROLL PROGRESS ───────────────────────── */
 const sections = document.querySelectorAll('section[id], .masthead[id]');
 const navLinks = document.querySelectorAll('.doc-nav a');
+const progress = document.querySelector('.scroll-progress');
 
-const markActive = () => {
+const onScroll = () => {
   let current = '';
   sections.forEach(sec => {
     if (window.scrollY >= sec.offsetTop - 80) current = sec.id;
@@ -30,13 +31,23 @@ const markActive = () => {
   navLinks.forEach(a => {
     a.classList.toggle('active', a.getAttribute('href') === `#${current}`);
   });
+
+  if (progress) {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    progress.style.transform = `scaleX(${max > 0 ? window.scrollY / max : 0})`;
+  }
 };
 
-window.addEventListener('scroll', markActive, { passive: true });
-markActive();
+window.addEventListener('scroll', onScroll, { passive: true });
+window.addEventListener('resize', onScroll, { passive: true });
+onScroll();
 
 /* ─── FADE-IN ON SCROLL ──────────────────────────────────── */
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.querySelectorAll(
+    '.masthead-tag, h1, .masthead-meta, .section-label, .project-table, .profile-grid, .expertise-table, .contact-grid'
+  ).forEach(el => el.classList.add('fade-in'));
+
   const observer = new IntersectionObserver(entries => {
     entries.forEach(e => {
       if (e.isIntersecting) {
