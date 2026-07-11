@@ -5,8 +5,8 @@
   --ink-2:   #6B6B66;
   --rule:    #DAD6CC;
   --accent:  #D4501E;
-  --sans:    'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --mono:    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --sans:    'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --mono:    'IBM Plex Mono', 'Courier New', monospace;
   color-scheme: light;
   /* type scale ×1.25 from 16 */
   --t-2xs: 0.512rem;
