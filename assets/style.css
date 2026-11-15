@@ -609,59 +609,99 @@ a.toc-item:hover { color: var(--accent); padding-left: 4px; }
 
 .cta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 28px; }
 
-/* ─── TOOLBOX TEASER (portfolio) ─────────────────────────── */
-.tool-card {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
-  gap: 0 16px;
-  align-items: center;
-  padding: 28px 0;
-  border-top: 1px solid var(--rule);
+.meta-link {
   border-bottom: 1px solid var(--rule);
-  transition: background .15s;
+  transition: color .15s, border-color .15s;
 }
-.tool-card:hover { background: var(--tint); }
+.meta-link:hover { color: var(--accent); border-color: var(--accent); }
 
-.tool-num {
-  align-self: start;
-  padding-top: 4px;
-  font-family: var(--mono);
-  font-size: var(--t-sm);
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.tool-title {
-  font-size: var(--t-lg);
-  font-weight: 600;
-  letter-spacing: -.01em;
-  margin-bottom: 6px;
-}
-
-.tool-desc {
-  font-size: var(--t-sm);
-  line-height: 1.65;
-  color: var(--ink-2);
-  max-width: 60ch;
-}
-
-.tool-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 14px;
-  list-style: none;
-}
-
-.tool-tags li {
+.catalogue-note {
+  margin-top: 28px;
   font-family: var(--mono);
   font-size: var(--t-xs);
   letter-spacing: .06em;
+  color: var(--ink-2);
+}
+
+/* ─── PRINCIPLES (tools home) ────────────────────────────── */
+.principles {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--ink);
+}
+
+.principles li {
+  padding: 22px 24px 26px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.principles li + li { padding-left: 24px; border-left: 1px solid var(--rule); }
+
+.pr-num {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 18px;
+}
+
+.principles h3 {
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -.005em;
+  margin-bottom: 8px;
+}
+
+.principles p {
+  font-size: var(--t-sm);
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+/* ─── AUTHOR (tools home, kept discreet) ─────────────────── */
+.author {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
+  gap: 48px;
+  align-items: start;
+}
+
+.author-name { font-size: var(--t-lg); font-weight: 600; letter-spacing: -.01em; line-height: 1.3; }
+
+.author-role {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--ink-2);
-  border: 1px solid var(--rule);
-  padding: 3px 8px;
 }
+
+.author-text {
+  font-size: var(--t-md);
+  line-height: 1.7;
+  color: var(--ink);
+  max-width: 560px;
+}
+
+.author-links { list-style: none; min-width: 200px; }
+
+.author-links a {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  transition: color .15s, padding .2s ease;
+}
+.author-links li:first-child a { border-top: 1px solid var(--rule); }
+.author-links a:hover { color: var(--accent); padding-left: 4px; }
 
 /* ─── PROFILE ────────────────────────────────────────────── */
 .profile-grid {
@@ -840,7 +880,7 @@ a.toc-item:hover { color: var(--accent); padding-left: 4px; }
   .fade-in { transition: none; opacity: 1; transform: none; }
   .project-detail.open .detail-inner,
   .project-detail.open .detail-figure-full { animation: none; }
-  .proj-title, .doc-nav a::after, .toc-item, .more-link, .cta, .contact-arrow { transition: none; }
+  .proj-title, .doc-nav a::after, .toc-item, .more-link, .cta, .contact-arrow, .author-links a { transition: none; }
 }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────── */
@@ -860,6 +900,10 @@ a.toc-item:hover { color: var(--accent); padding-left: 4px; }
   .contact-item, .contact-item:nth-child(even) { border-right: none; padding-left: 0; }
   .doc-header { grid-template-columns: auto 1fr auto; }
   .doc-header > nav { justify-self: center; }
+  .principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .principles li:nth-child(odd) { padding-left: 0; border-left: none; }
+  .author { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .author-links { max-width: 420px; }
 }
 
 @media (max-width: 760px) {
@@ -885,8 +929,9 @@ a.toc-item:hover { color: var(--accent); padding-left: 4px; }
   .proj-title { font-size: .9375rem; }
   .proj-status { white-space: normal; width: 76px; }
   .section-label { flex-wrap: wrap; }
-  .tool-card { grid-template-columns: 36px minmax(0, 1fr); }
-  .tool-card .cta { grid-column: 2; justify-self: start; margin-top: 20px; }
+  .principles { grid-template-columns: minmax(0, 1fr); }
+  .principles li, .principles li + li { padding: 18px 0 20px; border-left: none; }
+  .pr-num { margin-bottom: 10px; }
   .expertise-table td:first-child { width: 110px; }
   .doc-footer { grid-template-columns: 1fr; justify-items: start; gap: 12px; }
   .doc-footer > span:last-child { justify-self: start; }

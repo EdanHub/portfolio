@@ -1,0 +1,2276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audit interne ISO 19443 · Outils qualité · Edân Colak</title>
+<meta name="description" content="Outil d'audit interne ISO 19443 / ISO 9001 : préparation, plan d'audit, checklist terrain, rédaction des constats, vérification avant émission et rapport Word ou PDF. Hors ligne, données locales.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F5F2EA'/%3E%3Ctext x='5' y='23' font-family='Helvetica' font-size='18' font-weight='700' fill='%231A1A1A'%3EEC%3C/text%3E%3C/svg%3E">
+<script>
+  /* Thème partagé avec le site (clé 'theme'), appliqué avant le rendu pour éviter le flash */
+  (function () {
+    var t = localStorage.getItem('theme');
+    if (t !== 'light' && t !== 'dark') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<!--
+  Gestionnaire de rapports d'audit interne (ISO 19443) : préparation, plan d'audit, terrain, constats et rapport.
+  Le suivi des constats et des actions reste dans Fabasoft ; l'outil prépare et rédige.
+  Fichier autonome : HTML, CSS et JavaScript sans aucune dépendance externe.
+  Fonctionne hors ligne, ouverture directe dans Edge, Chrome ou Firefox.
+
+  Architecture du code (section <script>) :
+    1. Constantes métier (chapitres, évaluations, référentiel par défaut, questions d'audit, processus)
+    2. Utilitaires (dates, texte, similarité, tri des numéros d'exigence)
+    3. Stockage (adaptateur LocalStorage, remplaçable par SharePoint/OneDrive) et modèle
+    4. Calculs (vérification avant émission, aide à la rédaction)
+    5. Vue Audit : dossier, préparation, plan d'audit, terrain, constats, rapport, vérification
+    6. Vues transverses : mes audits, référentiel, paramètres
+    7. Exports : ZIP, Word (rapport et plan), impression PDF, JSON ; lecture Excel/CSV pour l'import
+    8. Exemples, événements et démarrage
+-->
+<style>
+:root{
+  --bg:#f3f4f6; --panel:#ffffff; --panel2:#f8f9fa; --border:#d9dde3; --border2:#c3c9d1;
+  --text:#1f2933; --muted:#5f6b7a; --accent:#2f4f6b; --accent2:#3f6a8f; --accent-text:#ffffff;
+  --hover:#eceff3; --danger:#a23434; --warn:#9a6a12; --ok:#2e6b3a; --bar:#6b8299; --bar2:#a23434;
+  --c-c:#6b7f8f; --c-pf:#2e6b3a; --c-pp:#3f6a8f; --c-obs:#9a6a12; --c-ncm:#b45a2a; --c-ncM:#a23434; --c-na:#8a939e; --on:#ffffff;
+  color-scheme: light;
+}
+:root[data-theme="dark"]{
+  --bg:#15181c; --panel:#1e2226; --panel2:#24292e; --border:#343a41; --border2:#454c55;
+  --text:#e3e6ea; --muted:#9aa4b0; --accent:#7fa6c6; --accent2:#9dbad3; --accent-text:#11161b;
+  --hover:#2a3036; --danger:#e07a7a; --warn:#d9a845; --ok:#7cc08a; --bar:#7d93a8; --bar2:#d46a5e;
+  --c-c:#9aaab8; --c-pf:#7cc08a; --c-pp:#8fb3d4; --c-obs:#d9a845; --c-ncm:#e0915e; --c-ncM:#e07a7a; --c-na:#8a939e; --on:#11161b;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:13px/1.45 Calibri,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-rows:48px 1fr;grid-template-columns:196px minmax(0,1fr);height:100vh;height:100dvh}
+.m-only,.m-inline,.btn.m-only{display:none}
+header{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+.site-back{color:var(--muted);text-decoration:none;white-space:nowrap;padding:4px 12px 4px 0;border-right:1px solid var(--border);font-size:12.5px}
+.site-back:hover{color:var(--accent)}
+.site-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.brand{font-weight:700;font-size:15px;white-space:nowrap}
+.brand span{font-weight:400;color:var(--muted);margin-left:6px}
+.hdr-current{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);border-left:1px solid var(--border);padding-left:14px}
+.hdr-current b{color:var(--text)}
+.spacer{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+nav{background:var(--panel);border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+nav button{all:unset;padding:8px 12px;border-radius:6px;cursor:pointer;color:var(--text)}
+nav button:hover{background:var(--hover)}
+nav button.active{background:var(--hover);font-weight:600;box-shadow:inset 3px 0 0 var(--accent)}
+nav button:disabled{opacity:.4;cursor:default}
+nav .nav-foot{margin-top:auto;padding:8px 10px;font-size:11.5px;color:var(--muted);line-height:1.4}
+main{position:relative;overflow:hidden;min-width:0}
+.view{display:none;height:100%;overflow:auto;padding:20px 24px 40px}
+.view.active{display:block}
+#view-audit{padding:0}
+#view-audit.active{display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr)}
+.audit-body{overflow:auto;padding:18px 22px 40px;min-height:0}
+h2{font-size:18px;margin:0 0 4px}
+h3{font-size:14.5px;margin:22px 0 8px}
+h4{font-size:13px;margin:14px 0 6px}
+.lead{color:var(--muted);margin:0 0 16px;max-width:900px}
+
+/* Boutons et champs */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--border2);background:var(--panel);border-radius:5px;cursor:pointer;white-space:nowrap;line-height:1.35}
+.btn:hover{background:var(--hover)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.btn.primary:hover{background:var(--accent2)}
+.btn.danger{color:var(--danger)}
+.btn.primary.danger-bg{background:var(--danger);border-color:var(--danger);color:var(--on)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.btn.sm{padding:2px 8px;font-size:12px}
+input[type=text],input[type=search],input[type=date],input[type=number],select,textarea{width:100%;padding:5px 8px;border:1px solid var(--border2);border-radius:5px;background:var(--panel);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+textarea{resize:vertical;min-height:54px}
+.fld{display:block;margin:0 0 10px}
+.fld>span{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:6px;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border:1px solid var(--border2);border-radius:14px;cursor:pointer;background:var(--panel);font-size:12.5px}
+.chip:has(input:checked){background:color-mix(in srgb,var(--accent) 14%,var(--panel));border-color:var(--accent)}
+.chip input{margin:0}
+.box{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:14px 16px;margin:0 0 14px}
+.box h3:first-child{margin-top:0}
+.hint{font-size:12px;color:var(--muted);margin:2px 0 10px}
+
+/* Barre d'outils de l'audit */
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--border);min-height:44px}
+.toolbar select{width:auto;padding:4px 6px}
+.tabs{display:flex;gap:2px;align-self:stretch}
+.tabs button{all:unset;padding:0 12px;cursor:pointer;color:var(--muted);display:flex;align-items:center;gap:6px;border-bottom:2px solid transparent}
+.tabs button:hover{color:var(--text)}
+.tabs button.active{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.tabs .cnt{font-size:11px;font-weight:600;padding:0 6px;border-radius:9px;background:var(--hover);color:var(--muted)}
+.tabs .cnt.err{background:color-mix(in srgb,var(--danger) 18%,var(--panel));color:var(--danger)}
+.dropdown{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--border2);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:270px;padding:4px;z-index:50;display:none}
+.menu.open{display:block}
+.menu button{all:unset;display:block;width:100%;box-sizing:border-box;padding:7px 10px;border-radius:4px;cursor:pointer}
+.menu button:hover{background:var(--hover)}
+.menu button small{display:block;color:var(--muted);font-size:11.5px}
+.menu .msep{height:1px;background:var(--border);margin:4px 2px}
+
+/* Tableaux */
+table.tbl{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--border)}
+table.tbl th{text-align:left;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--panel2);padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
+table.tbl td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+table.tbl tr.click{cursor:pointer}
+table.tbl tr.click:hover td{background:var(--hover)}
+table.tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.tbl td.nowrap{white-space:nowrap}
+.clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.filters input[type=search]{max-width:300px}
+.filters select{width:auto}
+.empty{padding:28px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--border2);border-radius:6px}
+
+/* Évaluations et types de constats */
+.e-C{--c:var(--c-c)} .e-PF{--c:var(--c-pf)} .e-PP{--c:var(--c-pp)} .e-OBS{--c:var(--c-obs)} .e-NCm{--c:var(--c-ncm)} .e-NCM{--c:var(--c-ncM)} .e-NA{--c:var(--c-na)} .e-{--c:var(--border2)}
+.badge{display:inline-block;padding:0 7px;border-radius:10px;font-size:11.5px;font-weight:700;border:1px solid var(--c);color:var(--c);white-space:nowrap;line-height:17px}
+.badge.fill{background:var(--c);color:var(--on)}
+.tag{display:inline-block;font-size:11px;padding:0 6px;border-radius:3px;background:var(--hover);color:var(--muted);border:1px solid var(--border);white-space:nowrap;line-height:17px}
+.tag.nuc{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
+.tag.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--border))}
+.tag.err{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--border))}
+.seg{display:inline-flex;border:1px solid var(--border2);border-radius:5px;overflow:hidden;flex-shrink:0}
+.seg button{all:unset;padding:3px 9px;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);border-right:1px solid var(--border);min-width:22px;text-align:center}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--hover);color:var(--c)}
+.seg button.on{background:var(--c);color:var(--on)}
+
+/* Préparation */
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.side{position:sticky;top:0}
+.side .btn{white-space:normal;text-align:left;justify-content:flex-start}
+.chap{background:var(--panel);border:1px solid var(--border);border-radius:6px;margin:0 0 12px;overflow:hidden}
+.chap-head{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--panel2);border-bottom:1px solid var(--border);font-weight:600}
+.chap-head .muted{font-weight:400}
+.ref-row{display:grid;grid-template-columns:22px 62px minmax(0,1fr) auto;gap:8px;align-items:start;padding:6px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.ref-row:last-child{border-bottom:0}
+.ref-row:hover{background:var(--hover)}
+.ref-row input{margin:2px 0 0}
+.ref-row .cl{font-weight:700;font-variant-numeric:tabular-nums}
+.ref-row .docs{font-size:12px;color:var(--muted)}
+.ref-row .tags{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
+
+/* Terrain */
+.sticky-bar{position:sticky;top:-18px;z-index:5;background:var(--bg);padding:10px 0 10px;margin:-6px 0 8px;border-bottom:1px solid var(--border)}
+.progress{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.meter{height:8px;background:var(--hover);border-radius:4px;overflow:hidden;min-width:160px;flex:1;max-width:340px}
+.meter span{display:block;height:100%;background:var(--accent)}
+.item{background:var(--panel);border:1px solid var(--border);border-left:4px solid var(--border2);border-radius:6px;padding:10px 12px;margin:0 0 10px}
+.item.e-C,.item.e-PF,.item.e-PP,.item.e-OBS,.item.e-NCm,.item.e-NCM,.item.e-NA{border-left-color:var(--c)}
+.item-head{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.item-head .cl{font-weight:700;font-variant-numeric:tabular-nums;min-width:48px}
+.item-head .tt{flex:1;min-width:220px;font-weight:600}
+.item-docs,.item-req{font-size:12px;color:var(--muted);margin:4px 0 0 58px;white-space:pre-wrap}
+.item ol.qs{margin:8px 0 8px 58px;padding-left:18px}
+.item ol.qs li{margin:2px 0}
+.item ol.qs label{display:flex;gap:6px;align-items:flex-start;cursor:pointer}
+.item ol.qs input{margin-top:3px}
+.item ol.qs label.done span{color:var(--muted)}
+.item .body{margin-left:58px}
+.item textarea{min-height:46px}
+.item .foot{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.linkish{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.chap-title{font-size:13px;font-weight:700;margin:16px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+
+/* Constats */
+.cgrid{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
+.clist{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.clist button{all:unset;display:block;box-sizing:border-box;width:100%;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.clist button:last-child{border-bottom:0}
+.clist button:hover{background:var(--hover)}
+.clist button.active{background:var(--hover);box-shadow:inset 3px 0 0 var(--accent)}
+.clist .t{display:block;font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aid{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12.5px}
+.aid ul{margin:4px 0 0;padding-left:18px}
+.aid li{margin:2px 0}
+.aid li.ok{color:var(--ok)}
+.aid li.warn{color:var(--warn)}
+.aid li.err{color:var(--danger)}
+.sim{border-top:1px solid var(--border);margin-top:8px;padding-top:8px}
+
+/* Contrôle */
+.score{margin:0 0 10px;max-width:520px}
+.score .lbl{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px}
+.score .meter{max-width:none}
+.issue{display:block;width:100%;max-width:760px;text-align:left;border:1px solid var(--border);border-left:4px solid var(--muted);background:var(--panel);padding:6px 10px;border-radius:5px;margin:0 0 6px;cursor:pointer;color:var(--text)}
+.issue:hover{background:var(--hover)}
+.issue.err{border-left-color:var(--danger)}
+.issue.warn{border-left-color:var(--warn)}
+.issue.info{border-left-color:var(--ok);cursor:default}
+
+/* Indicateurs et cartes */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:0 0 14px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px;margin:0 0 14px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px 14px;min-width:0}
+.card h3{margin:0 0 4px}
+.card p.sub{margin:0 0 10px;color:var(--muted);font-size:12px}
+.bars .br{display:grid;grid-template-columns:minmax(110px,44%) 1fr 34px;gap:8px;align-items:center;margin:4px 0;font-size:12.5px}
+.bars .br .bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bars .track{height:10px;background:var(--hover);border-radius:3px;overflow:hidden;display:flex}
+.bars .track span{display:block;height:100%}
+.bars .bv{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:6px}
+.lgd i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* Planning et couverture */
+.plan{display:grid;grid-template-columns:minmax(160px,240px) repeat(12,minmax(26px,1fr));font-size:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--panel)}
+.plan>div{padding:4px 6px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);min-height:26px}
+.plan .h{background:var(--panel2);color:var(--muted);font-weight:600;text-align:center}
+.plan .h:first-child{text-align:left}
+.plan .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.plan .lab:hover{text-decoration:underline}
+.plan .on{background:color-mix(in srgb,var(--bar) 55%,var(--panel))}
+.plan .on.done{background:color-mix(in srgb,var(--ok) 55%,var(--panel))}
+.plan .on.cancel{background:repeating-linear-gradient(45deg,var(--hover),var(--hover) 4px,var(--panel) 4px,var(--panel) 8px)}
+table.mx td.cell{text-align:center;white-space:nowrap}
+.mxv{display:inline-block;min-width:30px;padding:0 6px;border-radius:4px;font-weight:700;font-size:12px;background:var(--c);color:var(--on)}
+.mxp{display:inline-block;min-width:30px;padding:0 6px;border-radius:4px;font-size:11.5px;color:var(--muted);border:1px dashed var(--border2)}
+tr.uncov td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.prio{display:grid;grid-template-columns:22px 60px minmax(0,1fr) 120px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12.5px}
+.prio:last-child{border-bottom:0}
+.prio .meter{min-width:0}
+
+/* Modale et notifications */
+.modal{position:fixed;inset:0;background:rgba(15,20,25,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:100}
+.modal.hidden{display:none}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 18px 50px rgba(0,0,0,.25);width:min(820px,100%);max-height:88vh;display:flex;flex-direction:column}
+.modal-box.wide{width:min(1100px,100%)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.modal-head h3{margin:0}
+#modal-body{padding:14px 16px;overflow:auto}
+#modal-foot{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+#modal-foot:empty{display:none}
+#toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:200}
+#toast div{background:var(--text);color:var(--bg);padding:9px 14px;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.2);max-width:420px;font-size:12.5px;display:flex;align-items:center;gap:14px}
+#toast div button{all:unset;cursor:pointer;font-weight:700;text-decoration:underline;text-underline-offset:2px;white-space:nowrap;padding:2px 0}
+.preview{overflow:auto;max-height:240px;border:1px solid var(--border);border-radius:5px;margin:6px 0 12px}
+.preview table{border-collapse:collapse;font-size:11.5px}
+.preview td,.preview th{border:1px solid var(--border);padding:3px 6px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview th{background:var(--panel2);color:var(--muted)}
+.preview tr.hdr td{font-weight:700;background:color-mix(in srgb,var(--accent) 12%,var(--panel))}
+.map-grid{display:grid;grid-template-columns:200px minmax(0,1fr);gap:6px 12px;align-items:center;margin:0 0 12px}
+.map-grid label{font-weight:600;font-size:12.5px}
+
+@media (max-width: 980px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:48px auto 1fr}
+  nav{flex-direction:row;overflow-x:auto;padding:6px;border-right:0;border-bottom:1px solid var(--border)}
+  nav button{white-space:nowrap}
+  nav .nav-foot{display:none}
+  .two-col,.cgrid{grid-template-columns:minmax(0,1fr)}
+  .side{position:static}
+  .item-docs,.item-req,.item ol.qs,.item .body{margin-left:0}
+  .grid3{grid-template-columns:1fr 1fr}
+  .brand span{display:none}
+}
+
+/* Téléphone : cibles tactiles larges, une colonne, tableaux en fiches */
+.warnbox{border:1px solid color-mix(in srgb,var(--warn) 45%,var(--border));background:color-mix(in srgb,var(--warn) 9%,var(--panel));border-radius:6px;padding:8px 12px;margin:0 0 14px;font-size:12.5px}
+.selbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:color-mix(in srgb,var(--accent) 10%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:6px;padding:8px 12px;margin:0 0 10px}
+td.selcell,th.selcell{width:34px;text-align:center}
+td.selcell input,th.selcell input{width:17px;height:17px;cursor:pointer}
+.danger-zone{border:1px solid color-mix(in srgb,var(--danger) 35%,var(--border));border-radius:6px;padding:12px 14px;margin-top:22px;max-width:980px}
+.danger-zone h3{margin:0 0 4px;color:var(--danger)}
+.welcome{max-width:760px}
+.hscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.preview-frame{width:100%;height:78vh;min-height:420px;border:1px solid var(--border2);border-radius:6px;background:#fff}
+table.plan-tbl td{padding:4px 6px}
+table.plan-tbl input{padding:4px 6px}
+@media (max-width: 700px){
+  body{font-size:14px}
+  input[type=text],input[type=search],input[type=date],input[type=number],select,textarea{font-size:16px;padding:8px 10px}
+  .btn{min-height:38px;padding:7px 12px}
+  .btn.sm{min-height:34px;padding:5px 10px;font-size:13px}
+  .lg-only,table.tbl.resp td.lg-only{display:none}
+  .m-inline{display:inline}
+  .m-only{display:block}
+  .btn.m-only{display:inline-flex}
+  header{gap:8px;padding:0 10px}
+  .brand{font-size:14px}
+  .hdr-current{display:none}
+  nav button{padding:7px 10px}
+  .view{padding:14px 12px 90px}
+  .audit-body{padding:10px 12px 90px}
+  .m-ident{font-size:13px;color:var(--muted);margin:0 0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m-ident b{color:var(--text)}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:8px 10px}
+  .kpi .v{font-size:19px}
+  .cards{grid-template-columns:1fr}
+  .lead{font-size:13px}
+  .toolbar{padding:0 6px;gap:6px;flex-wrap:nowrap}
+  .toolbar .tabs{overflow-x:auto;flex:1 1 auto;min-width:0;scrollbar-width:none}
+  .toolbar .tabs::-webkit-scrollbar{display:none}
+  .tabs button{padding:0 10px;white-space:nowrap}
+  .toolbar .stat-lbl,.toolbar>.spacer{display:none}
+  .menu{min-width:min(290px,92vw)}
+  .filters input[type=search]{max-width:none;flex:1 1 100%}
+  .filters select{flex:1 1 40%;min-width:0}
+  .filters .spacer{display:none}
+  .sticky-bar{top:-10px;margin:-4px -12px 8px;padding:8px 12px}
+  .progress{gap:8px}
+  .item{padding:10px}
+  .item-head{gap:6px}
+  .item-head .cl{min-width:0}
+  .item-head .tt{min-width:0;flex:1 1 60%}
+  .item .seg{display:grid;grid-template-columns:repeat(7,1fr);width:100%}
+  .item .seg button{padding:10px 0;font-size:13px}
+  .item ol.qs{padding-left:20px}
+  .item ol.qs label{padding:4px 0}
+  .item ol.qs input{width:20px;height:20px;flex-shrink:0;margin-top:0}
+  .item .foot input[data-qadd]{max-width:none;margin-left:0;flex:1 1 100%}
+  .item .foot .btn{flex:1 1 auto}
+  .cgrid.show-detail>.ccol-list{display:none}
+  .cgrid.show-list>.ccol-form{display:none}
+  .clist button{padding:11px 12px}
+  .two-col{gap:12px}
+  .prep-side{display:contents}
+  .prep-side .box:first-child{order:-1}
+  .ref-row{grid-template-columns:24px 50px minmax(0,1fr);padding:9px 10px}
+  .ref-row input{width:18px;height:18px}
+  .ref-row .tags{grid-column:3;justify-content:flex-start;max-width:none}
+  .prio{grid-template-columns:24px 46px minmax(0,1fr)}
+  .prio>.row{grid-column:3}
+  table.tbl.resp,table.tbl.resp tbody,table.tbl.resp tr,table.tbl.resp td{display:block;width:100%}
+  table.tbl.resp thead{display:none}
+  table.tbl.resp tr{border-bottom:1px solid var(--border);padding:8px 0}
+  table.tbl.resp td{border:0;padding:3px 12px}
+  table.tbl.resp td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--muted);font-weight:600}
+  table.tbl.resp td.selcell{width:auto;text-align:left}
+  table.tbl.resp td.selcell input{width:20px;height:20px}
+  table.tbl.resp td.acts{display:flex;gap:6px;flex-wrap:wrap;padding-top:6px}
+  table.tbl.mx{min-width:640px}
+  .plan{min-width:640px}
+  .modal{padding:0}
+  .modal-box,.modal-box.wide{width:100%;max-height:none;height:100%;border-radius:0;border:0}
+  .map-grid{grid-template-columns:1fr}
+  #toast{left:10px;right:10px;bottom:10px}
+  #toast div{max-width:none}
+  .danger-zone{margin-top:16px}
+  .preview-frame{height:70vh}
+  table.plan-tbl td{padding:3px 12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a class="site-back" href="../../" title="Retour à la boîte à outils">&larr; Outils</a>
+    <div class="brand">Audit interne<span>Préparation et rapport</span></div>
+    <div class="hdr-current" id="hdr-current"></div>
+    <div class="spacer"></div>
+    <button class="btn primary" type="button" data-act="new-audit">Nouvel audit</button>
+    <div class="dropdown">
+      <button class="btn" type="button" data-act="menu" data-menu="base-menu">Base complète</button>
+      <div class="menu" id="base-menu">
+        <button type="button" data-base="export-json">Exporter la base (JSON)<small>Sauvegarde, ou partage via OneDrive ou SharePoint</small></button>
+        <button type="button" data-base="import-json">Importer (JSON)<small>Un audit reçu, plusieurs audits ou une base complète</small></button>
+        <div class="msep"></div>
+        <button type="button" data-base="examples">Charger les exemples<small>Trois audits fictifs pour découvrir l'outil</small></button>
+      </div>
+    </div>
+  </header>
+  <nav id="nav">
+    <button type="button" data-view="programme">Mes audits</button>
+    <button type="button" data-view="audit">Audit<span class="lg-only"> en cours</span></button>
+    <button type="button" data-view="referentiel">Référentiel</button>
+    <button type="button" data-view="parametres">Paramètres</button>
+    <div class="nav-foot" id="nav-foot"></div>
+  </nav>
+  <main>
+    <section class="view" id="view-programme"></section>
+    <section class="view" id="view-audit"></section>
+    <section class="view" id="view-referentiel"></section>
+    <section class="view" id="view-parametres"></section>
+  </main>
+</div>
+<div class="modal hidden" id="modal"><div class="modal-box" id="modal-box"><div class="modal-head"><h3 id="modal-title"></h3><button class="btn ghost sm" type="button" data-act="modal-close">Fermer</button></div><div id="modal-body"></div><div id="modal-foot"></div></div></div>
+<div id="toast"></div>
+<input type="file" id="file-json" accept=".json,application/json,text/plain" hidden>
+<input type="file" id="file-ref" accept=".xlsx,.xlsm,.csv,.txt" hidden>
+<iframe id="print-frame" title="Impression" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0"></iframe>
+<script>
+'use strict';
+/* =====================================================================
+   1. CONSTANTES MÉTIER
+   ===================================================================== */
+const APP_KEY = 'audit-iso19443-v1';
+const APP_VERSION = 1;
+
+const CHAPITRES = {
+  '4': "Contexte de l'organisme", '5': 'Leadership', '6': 'Planification', '7': 'Support',
+  '8': 'Réalisation des activités opérationnelles', '9': 'Évaluation des performances', '10': 'Amélioration'
+};
+
+/* Évaluations d'une exigence et types de constats. sev sert au tri et à la couleur dominante. */
+const EVALS = [
+  { code: 'C',   sev: 0 },
+  { code: 'PF',  sev: 1 },
+  { code: 'PP',  sev: 2 },
+  { code: 'OBS', sev: 3 },
+  { code: 'NCm', sev: 4 },
+  { code: 'NCM', sev: 5 },
+  { code: 'NA',  sev: -1 }
+];
+const SEV = Object.fromEntries(EVALS.map(e => [e.code, e.sev]));
+const CONSTAT_TYPES = ['NCM', 'NCm', 'OBS', 'PP', 'PF'];
+const isNC = c => c === 'NCm' || c === 'NCM';
+const isEcart = c => isNC(c) || c === 'OBS';
+
+const TYPES_AUDIT = ['Audit interne processus', 'Audit interne produit', 'Audit interne de suivi', 'Audit fournisseur', 'Audit à blanc'];
+/* Étapes du travail de l'auditeur ; le cycle de vie des constats et des actions est porté par Fabasoft. */
+const STATUTS_AUDIT = ['En préparation', 'Sur le terrain', 'Rapport en rédaction', 'Rapport émis'];
+const STATUTS_ANCIENS = { 'Planifié': 'En préparation', 'En cours': 'Sur le terrain', 'Clôturé': 'Rapport émis', 'Annulé': 'En préparation' };
+const APPRECIATIONS = ['', 'Exigences satisfaites', 'Exigences satisfaites avec écarts mineurs', 'Écarts significatifs : actions requises', 'Exigences non satisfaites'];
+const MOIS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+
+/* Mots qui rendent un constat imprécis : l'écart doit être quantifié sur l'échantillon examiné. */
+const MOTS_VAGUES = ['parfois', 'certains', 'certaines', 'quelques', 'pas toujours', 'souvent', 'globalement', 'plusieurs', 'manque de', 'insuffisant', 'insuffisante', 'pas assez', 'peu de'];
+const MOTS_SOLUTION = ['il faudrait', 'il faut', 'mettre en place', 'nous recommandons', 'recommand', 'devrait', 'devraient'];
+
+/* Structure commune à l'ISO 9001:2015 et à l'ISO 19443:2018 (intitulés abrégés).
+   Le texte des exigences n'est pas reproduit : il vient de la synthèse interne importée. */
+const REF_DEFAUT = [
+  ['4.1', "Compréhension de l'organisme et de son contexte"],
+  ['4.2', 'Besoins et attentes des parties intéressées'],
+  ['4.3', "Domaine d'application du système de management"],
+  ['4.4', 'Système de management et processus'],
+  ['5.1.1', 'Leadership et engagement : généralités'],
+  ['5.1.2', 'Orientation client'],
+  ['5.2.1', 'Établissement de la politique'],
+  ['5.2.2', 'Communication de la politique'],
+  ['5.3', 'Rôles, responsabilités et autorités'],
+  ['6.1', 'Actions face aux risques et opportunités'],
+  ['6.2', 'Objectifs et planification pour les atteindre'],
+  ['6.3', 'Planification des modifications'],
+  ['7.1.1', 'Ressources : généralités'],
+  ['7.1.2', 'Ressources humaines'],
+  ['7.1.3', 'Infrastructure'],
+  ['7.1.4', 'Environnement de mise en œuvre des processus'],
+  ['7.1.5', 'Ressources pour la surveillance et la mesure'],
+  ['7.1.6', 'Connaissances organisationnelles'],
+  ['7.2', 'Compétences'],
+  ['7.3', 'Sensibilisation'],
+  ['7.4', 'Communication'],
+  ['7.5.1', 'Informations documentées : généralités'],
+  ['7.5.2', 'Création et mise à jour des informations documentées'],
+  ['7.5.3', 'Maîtrise des informations documentées'],
+  ['8.1', 'Planification et maîtrise opérationnelles'],
+  ['8.2.1', 'Communication avec les clients'],
+  ['8.2.2', 'Détermination des exigences relatives aux produits'],
+  ['8.2.3', 'Revue des exigences relatives aux produits'],
+  ['8.2.4', 'Modifications des exigences'],
+  ['8.3.1', 'Conception et développement : généralités'],
+  ['8.3.2', 'Planification de la conception'],
+  ['8.3.3', "Éléments d'entrée de la conception"],
+  ['8.3.4', 'Maîtrise de la conception'],
+  ['8.3.5', 'Éléments de sortie de la conception'],
+  ['8.3.6', 'Modifications de la conception'],
+  ['8.4.1', 'Prestataires externes : généralités'],
+  ['8.4.2', 'Type et étendue de la maîtrise des prestataires'],
+  ['8.4.3', "Informations à l'attention des prestataires externes"],
+  ['8.5.1', 'Maîtrise de la production'],
+  ['8.5.2', 'Identification et traçabilité'],
+  ['8.5.3', 'Propriété des clients ou des prestataires externes'],
+  ['8.5.4', 'Préservation'],
+  ['8.5.5', 'Activités après livraison'],
+  ['8.5.6', 'Maîtrise des modifications en production'],
+  ['8.6', 'Libération des produits et services'],
+  ['8.7', 'Maîtrise des éléments de sortie non conformes'],
+  ['9.1.1', 'Surveillance et mesure : généralités'],
+  ['9.1.2', 'Satisfaction du client'],
+  ['9.1.3', 'Analyse et évaluation'],
+  ['9.2', 'Audit interne'],
+  ['9.3.1', 'Revue de direction : généralités'],
+  ['9.3.2', "Éléments d'entrée de la revue de direction"],
+  ['9.3.3', 'Éléments de sortie de la revue de direction'],
+  ['10.1', 'Amélioration : généralités'],
+  ['10.2', 'Non-conformité et action corrective'],
+  ['10.3', 'Amélioration continue']
+];
+
+/* Rattachement par défaut des exigences aux processus du site (modifiable dans le référentiel). */
+const PROCESSUS_DEFAUT = {
+  'Pilotage et revue de direction': ['4.1', '4.2', '4.3', '4.4', '5.1.1', '5.2.1', '5.2.2', '5.3', '6.1', '6.2', '6.3', '9.1.1', '9.1.3', '9.3.1', '9.3.2', '9.3.3'],
+  'Commercial et revue de contrat': ['5.1.2', '8.2.1', '8.2.2', '8.2.3', '8.2.4', '9.1.2'],
+  'Conception et ingénierie': ['7.1.6', '8.3.1', '8.3.2', '8.3.3', '8.3.4', '8.3.5', '8.3.6'],
+  'Achats et fournisseurs': ['8.4.1', '8.4.2', '8.4.3'],
+  'Contrôle réception': ['7.1.5', '7.5.3', '8.4.2', '8.5.2', '8.6', '8.7'],
+  'Production': ['7.1.3', '7.1.4', '8.1', '8.5.1', '8.5.2', '8.5.4', '8.5.6'],
+  'Contrôle et essais': ['7.1.5', '8.5.2', '8.6', '8.7'],
+  'Expédition et après-vente': ['8.5.3', '8.5.4', '8.5.5'],
+  'Maîtrise documentaire': ['7.5.1', '7.5.2', '7.5.3'],
+  'Ressources humaines et compétences': ['7.1.2', '7.2', '7.3'],
+  'Métrologie': ['7.1.5'],
+  'Amélioration continue (FNC, CAPA)': ['8.7', '9.2', '10.1', '10.2', '10.3'],
+  'Communication et culture de sûreté': ['5.1.1', '7.3', '7.4']
+};
+
+/* Questions d'audit proposées par défaut, modifiables exigence par exigence dans le référentiel. */
+const QUESTIONS_DEFAUT = {
+  '4.1': ["Les enjeux internes et externes du site, y compris ceux liés à la sûreté nucléaire, sont-ils identifiés et revus à une fréquence définie ?", "Comment la surveillance de ces enjeux alimente-t-elle la revue de direction ?"],
+  '4.2': ["Les parties intéressées pertinentes (clients exploitants, autorité de sûreté, fournisseurs, salariés) et leurs exigences sont-elles identifiées ?", "Comment les évolutions de ces exigences sont-elles suivies et prises en compte ?"],
+  '4.3': ["Le domaine d'application du SMQ est-il documenté, avec la justification des exigences non applicables ?", "Les activités et produits destinés au nucléaire sont-ils clairement identifiés dans ce domaine ?"],
+  '4.4': ["La cartographie des processus est-elle à jour (pilotes, interactions, indicateurs, risques) ?", "Comment l'approche graduée est-elle appliquée selon l'importance des produits pour la sûreté nucléaire ?", "Les fiches processus sont-elles revues et leurs indicateurs suivis ?"],
+  '5.1.1': ["Comment la direction démontre-t-elle son engagement pour la qualité et la culture de sûreté nucléaire ?", "La priorité donnée à la sûreté est-elle visible dans les arbitrages entre délai, coût et qualité ?"],
+  '5.1.2': ["Les exigences des clients et les exigences réglementaires sont-elles déterminées et respectées de façon constante ?", "La satisfaction des clients fait-elle l'objet d'un suivi par la direction ?"],
+  '5.2.1': ["La politique qualité est-elle adaptée au contexte du site et inclut-elle l'engagement envers la sûreté nucléaire ?"],
+  '5.2.2': ["La politique est-elle communiquée, comprise et accessible aux parties intéressées ?", "Les personnes rencontrées savent-elles dire ce que la politique implique pour leur poste ?"],
+  '5.3': ["Les rôles, responsabilités et autorités sont-ils définis, communiqués et compris (organigrammes, fiches de fonction, délégations) ?", "Qui a l'autorité pour arrêter une activité en cas de doute sur la sûreté ou la qualité ?"],
+  '6.1': ["Les risques et opportunités du processus sont-ils identifiés, évalués et traités ?", "L'efficacité des actions de maîtrise des risques est-elle évaluée ?"],
+  '6.2': ["Les objectifs qualité sont-ils mesurables, déclinés aux processus et suivis ?", "Les plans d'actions associés précisent-ils responsables, moyens et échéances ?"],
+  '6.3': ["Les modifications du SMQ (organisation, processus, outils) sont-elles planifiées en évaluant leurs conséquences ?", "Les modifications d'organisation pouvant affecter la sûreté sont-elles analysées avant leur mise en œuvre ?"],
+  '7.1.1': ["Les ressources nécessaires au processus sont-elles déterminées et disponibles ?"],
+  '7.1.2': ["Les effectifs permettent-ils de réaliser les activités sans compromettre la qualité ?"],
+  '7.1.3': ["Les équipements et locaux sont-ils entretenus selon un plan de maintenance, avec enregistrements ?"],
+  '7.1.4': ["L'environnement de travail (propreté, exclusion des corps étrangers, conditions ambiantes) est-il maîtrisé là où il influe sur la conformité ?"],
+  '7.1.5': ["Les moyens de mesure sont-ils identifiés, étalonnés ou vérifiés, avec un statut de validité visible ?", "Quand un moyen est trouvé hors tolérance, l'impact sur les produits déjà contrôlés est-il analysé ?", "La traçabilité des étalonnages aux étalons nationaux ou internationaux est-elle assurée ?"],
+  '7.1.6': ["Les connaissances nécessaires sont-elles identifiées, conservées et transmises (retour d'expérience, départs, savoir-faire) ?"],
+  '7.2': ["Les compétences requises sont-elles définies par poste et évaluées ?", "Les qualifications et habilitations particulières (contrôles non destructifs, soudage, sûreté nucléaire) sont-elles à jour ?", "L'efficacité des formations est-elle évaluée ?"],
+  '7.3': ["Les personnes connaissent-elles la politique, leurs objectifs et l'impact de leur travail sur la sûreté nucléaire ?", "Les sensibilisations à la culture de sûreté, aux règles d'or et aux produits contrefaits, frauduleux ou suspects sont-elles réalisées et enregistrées ?"],
+  '7.4': ["Qu'est-ce qui est communiqué, à qui, quand et par quel canal ?", "Les personnes peuvent-elles signaler un problème de sûreté ou de qualité sans crainte de représailles ?"],
+  '7.5.1': ["Les informations documentées exigées par la norme et par les clients sont-elles identifiées ?"],
+  '7.5.2': ["Les documents sont-ils identifiés (référence, indice), revus et approuvés avant diffusion ?", "Les documents cités en référence dans les procédures sont-ils en vigueur ?"],
+  '7.5.3': ["Seules les versions en vigueur sont-elles disponibles aux postes ? Les documents périmés sont-ils retirés ou identifiés ?", "Les enregistrements sont-ils protégés, lisibles et conservés selon les durées requises, y compris les exigences des clients du nucléaire ?", "Les documents d'origine externe (normes, spécifications client) sont-ils identifiés et maîtrisés ?"],
+  '8.1': ["Les activités sont-elles planifiées (plans qualité, programmes de contrôle) selon les exigences du produit ?", "Les activités importantes pour la protection et leurs exigences associées sont-elles identifiées dans les dossiers concernés ?", "Quelles dispositions empêchent l'introduction de produits contrefaits, frauduleux ou suspects ?"],
+  '8.2.1': ["Les canaux de communication avec le client sont-ils définis (interlocuteurs, réclamations, informations sur les produits) ?"],
+  '8.2.2': ["Les exigences relatives au produit, y compris réglementaires et de sûreté, sont-elles déterminées et documentées ?"],
+  '8.2.3': ["La revue de contrat est-elle réalisée avant engagement et enregistrée ?", "Les exigences particulières (spécifications client, codes de construction) sont-elles identifiées et transmises aux fonctions concernées ?"],
+  '8.2.4': ["Les modifications de commande sont-elles revues et répercutées dans les documents et auprès des personnes concernées ?"],
+  '8.3.1': ["Le processus de conception est-il établi et adapté à la nature des produits ?"],
+  '8.3.2': ["La conception est-elle planifiée (étapes, revues, vérifications, validations, responsabilités) ?"],
+  '8.3.3': ["Les éléments d'entrée (exigences fonctionnelles, de sûreté, réglementaires, retour d'expérience) sont-ils complets et sans ambiguïté ?"],
+  '8.3.4': ["Les revues, vérifications et validations sont-elles réalisées et enregistrées, par des personnes indépendantes quand c'est requis ?"],
+  '8.3.5': ["Les éléments de sortie répondent-ils aux éléments d'entrée et précisent-ils les caractéristiques essentielles du produit ?"],
+  '8.3.6': ["Les modifications de conception sont-elles identifiées, revues, autorisées et leur impact évalué ?"],
+  '8.4.1': ["Les fournisseurs sont-ils évalués, sélectionnés et surveillés selon des critères adaptés à l'importance du produit pour la sûreté ?", "La liste des fournisseurs approuvés est-elle à jour et utilisée par les acheteurs ?"],
+  '8.4.2': ["Le type et l'étendue de la surveillance (contrôle réception, inspections chez le fournisseur, points d'arrêt) sont-ils définis selon les risques ?", "Les produits reçus sont-ils vérifiés avant utilisation, avec enregistrement du résultat ?"],
+  '8.4.3': ["Les commandes transmettent-elles toutes les exigences applicables (techniques, qualité, sûreté, documentaires, accès aux locaux du fournisseur) ?", "Les exigences sont-elles répercutées aux sous-traitants de rang 2 ?", "La prévention des produits contrefaits, frauduleux ou suspects est-elle exigée dans les commandes ?"],
+  '8.5.1': ["Les opérations sont-elles réalisées selon des documents en vigueur (gammes, modes opératoires, plans) disponibles au poste ?", "Les procédés spéciaux (soudage, traitement thermique, contrôles non destructifs) sont-ils qualifiés et réalisés par du personnel qualifié ?", "Les points d'arrêt et points de notification du client sont-ils respectés ?"],
+  '8.5.2': ["Les produits sont-ils identifiés tout au long de la réalisation, avec leur état de contrôle ?", "La traçabilité exigée (matière, coulée, opérateur, procédé) est-elle assurée et vérifiable ?"],
+  '8.5.3': ["Les biens du client ou des fournisseurs (outillages, pièces, données) sont-ils identifiés et protégés, et toute perte ou détérioration est-elle signalée ?"],
+  '8.5.4': ["Les produits sont-ils préservés (manutention, propreté, protection, stockage, emballage) jusqu'à la livraison ?"],
+  '8.5.5': ["Les exigences après livraison (garantie, assistance, retour d'expérience des exploitants) sont-elles prises en compte ?"],
+  '8.5.6': ["Les modifications en production sont-elles revues, autorisées et enregistrées ?"],
+  '8.6': ["La libération des produits a-t-elle lieu après toutes les vérifications prévues, par une personne autorisée ?", "Le dossier de fin de fabrication est-il complet, vérifié et signé avant envoi ?"],
+  '8.7': ["Les produits non conformes sont-ils identifiés et isolés pour empêcher leur utilisation ?", "Les dérogations et décisions de traitement sont-elles autorisées au bon niveau, y compris par le client quand c'est requis ?", "Les non-conformités sont-elles enregistrées dans le registre des FNC ?"],
+  '9.1.1': ["Les indicateurs de performance sont-ils définis, mesurés et analysés à une fréquence adaptée ?"],
+  '9.1.2': ["La perception du client est-elle surveillée (enquêtes, réclamations, évaluations par le client) ?"],
+  '9.1.3': ["Les données sont-elles analysées pour évaluer la performance, l'efficacité du SMQ et les besoins d'amélioration ?"],
+  '9.2': ["Le programme d'audit tient-il compte de l'importance des processus, des changements et des résultats des audits précédents ?", "Les auditeurs sont-ils qualifiés et indépendants des activités auditées ?", "Les constats des audits précédents ont-ils été traités et l'efficacité des actions vérifiée ?"],
+  '9.3.1': ["La revue de direction est-elle réalisée à la fréquence prévue, avec les participants requis ?"],
+  '9.3.2': ["Tous les éléments d'entrée requis sont-ils traités, y compris la culture de sûreté et la performance des fournisseurs ?"],
+  '9.3.3': ["Les décisions et actions issues de la revue sont-elles enregistrées et suivies ?"],
+  '10.1': ["Les opportunités d'amélioration sont-elles identifiées et mises en œuvre ?"],
+  '10.2': ["Les non-conformités font-elles l'objet d'une correction, d'une analyse des causes et d'actions correctives proportionnées ?", "L'efficacité des actions correctives est-elle vérifiée avant clôture ?", "Les actions sont-elles suivies dans les délais dans l'outil CAPA ?"],
+  '10.3': ["Comment les résultats des analyses, des audits et des revues alimentent-ils l'amélioration continue ?"]
+};
+
+const SETTINGS_DEFAUT = {
+  organisation: '',
+  site: '',
+  auditeur: '',
+  prefixe: 'AQ',
+  minutesParExigence: 15,
+  heureDebut: '08:30',
+  referentiels: 'ISO 19443:2018 ; ISO 9001:2015',
+  libelles: { C: 'Conforme', PF: 'Point fort', PP: 'Piste de progrès', OBS: 'Observation', NCm: 'Non-conformité mineure', NCM: 'Non-conformité majeure', NA: 'Non audité' },
+  processus: Object.keys(PROCESSUS_DEFAUT),
+  mentionFin: "Les constats sont enregistrés dans Fabasoft, où le processus audité apporte sa réponse : correction, analyse des causes et actions correctives. L'efficacité des actions est vérifiée avant la clôture des constats.",
+  theme: 'auto',
+  lastId: null
+};
+
+/* =====================================================================
+   2. UTILITAIRES
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const pad = n => String(n).padStart(2, '0');
+const isoLocal = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtDate = s => { if (!s) return ''; const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : String(s); };
+const fmtDateTime = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? '' : `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} à ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const yearOf = s => { const m = String(s || '').match(/^(\d{4})/); return m ? Number(m[1]) : null; };
+const addDays = (iso, n) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); if (!m) return ''; const d = new Date(+m[1], +m[2] - 1, +m[3] + Number(n || 0)); return isoLocal(d); };
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+const opt = (v, l, cur) => `<option value="${esc(v)}"${String(v) === String(cur ?? '') ? ' selected' : ''}>${esc(l)}</option>`;
+const fld = (label, inner, cls = '') => `<label class="fld ${cls}"><span>${esc(label)}</span>${inner}</label>`;
+const plural = (n, s, p) => `${n} ${n > 1 ? (p || s + 's') : s}`;
+const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const truncate = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
+const splitList = s => String(s || '').split(/[;\n]+/).map(x => x.trim()).filter(Boolean);
+const uniq = a => Array.from(new Set(a));
+
+/* Similarité de Sørensen-Dice sur les bigrammes de lettres (même mesure que l'outil arbre des causes). */
+function bigrams(s) { const t = norm(s).replace(/ /g, ''); const m = new Map(); for (let i = 0; i < t.length - 1; i++) { const b = t.slice(i, i + 2); m.set(b, (m.get(b) || 0) + 1); } return m; }
+function dice(a, b) {
+  const A = bigrams(a), B = bigrams(b); let inter = 0, na = 0, nb = 0;
+  A.forEach(v => na += v); B.forEach(v => nb += v);
+  A.forEach((v, k) => { if (B.has(k)) inter += Math.min(v, B.get(k)); });
+  return na + nb ? 2 * inter / (na + nb) : 0;
+}
+
+/* Numéros d'exigence : tri naturel (4.4 avant 4.10) et chapitre. */
+function clauseNum(c) { const m = String(c || '').match(/\d+(?:\.\d+)*/); return m ? m[0] : ''; }
+function clauseKey(c) { const n = clauseNum(c); return n ? n.split('.').map(Number) : [999]; }
+function cmpClause(a, b) {
+  const A = clauseKey(a), B = clauseKey(b);
+  for (let i = 0; i < Math.max(A.length, B.length); i++) { const x = A[i] ?? -1, y = B[i] ?? -1; if (x !== y) return x - y; }
+  return String(a || '').localeCompare(String(b || ''), 'fr');
+}
+const chapOf = c => { const k = clauseKey(c)[0]; return k === 999 ? '' : String(k); };
+const chapLabel = ch => ch ? `${ch}. ${CHAPITRES[ch] || 'Chapitre ' + ch}` : 'Hors référentiel';
+const evalLabel = c => (store.settings.libelles || {})[c] || SETTINGS_DEFAUT.libelles[c] || 'Non évalué';
+const PLURIELS = { NCM: ['non-conformité majeure', 'non-conformités majeures'], NCm: ['non-conformité mineure', 'non-conformités mineures'], OBS: ['observation', 'observations'], PP: ['piste de progrès', 'pistes de progrès'], PF: ['point fort', 'points forts'], C: ['conforme', 'conformes'], NA: ['non audité', 'non audités'] };
+/* Libellé en minuscules accordé au nombre ; un libellé personnalisé dans Paramètres est repris tel quel. */
+function typeLabel(c, n) {
+  const l = evalLabel(c);
+  if (l === SETTINGS_DEFAUT.libelles[c] && PLURIELS[c]) return PLURIELS[c][n > 1 ? 1 : 0];
+  return l.charAt(0).toLowerCase() + l.slice(1);
+}
+const badge = (c, fill) => c ? `<span class="badge e-${esc(c)}${fill ? ' fill' : ''}" title="${esc(evalLabel(c))}">${esc(c)}</span>` : '<span class="badge e-">Non évalué</span>';
+
+/* =====================================================================
+   3. STOCKAGE ET MODÈLE
+   L'adaptateur Storage est le seul point de contact avec la persistance :
+   le remplacer suffit pour stocker la base sur SharePoint ou OneDrive.
+   ===================================================================== */
+const Storage = {
+  load() { try { const raw = localStorage.getItem(APP_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } },
+  save(data) {
+    try { localStorage.setItem(APP_KEY, JSON.stringify(data)); return true; }
+    catch (e) { toast("Enregistrement impossible dans ce navigateur. Exporte la base en JSON pour ne rien perdre."); return false; }
+  }
+};
+
+function defaultReferentiel() {
+  const procOf = {};
+  Object.entries(PROCESSUS_DEFAUT).forEach(([p, cl]) => cl.forEach(c => (procOf[c] = procOf[c] || []).push(p)));
+  return REF_DEFAUT.map(([clause, titre]) => ({
+    id: 'r' + clause.replace(/\./g, '-'), clause, titre, exigence: '', documents: '',
+    processus: (procOf[clause] || []).join(' ; '), nucleaire: false,
+    questions: (QUESTIONS_DEFAUT[clause] || []).slice(), source: 'Référentiel par défaut'
+  }));
+}
+
+function normAudit(a) {
+  const d = {
+    id: uid(), numero: '', titre: '', type: TYPES_AUDIT[0], processus: [], perimetre: '', referentiels: '', objectifs: '',
+    dateDebut: '', dateFin: '', lieu: '', pilote: '', auditeurs: '', verificateur: '', approbateur: '', diffusion: '',
+    audites: [], statut: STATUTS_AUDIT[0], synthese: '', appreciation: '', entrees: '', plan: [], items: [], constats: [],
+    indice: 'A', dateEmission: '', options: {}, lastExport: '',
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  };
+  a = Object.assign(d, a || {});
+  if (STATUTS_ANCIENS[a.statut]) a.statut = STATUTS_ANCIENS[a.statut];
+  if (!STATUTS_AUDIT.includes(a.statut)) a.statut = STATUTS_AUDIT[0];
+  a.options = Object.assign({ checklist: true, documents: true, questions: false }, a.options || {});
+  if (!Array.isArray(a.processus)) a.processus = splitList(a.processus);
+  a.audites = (a.audites || []).map(p => Object.assign({ nom: '', fonction: '', ouverture: false, cloture: false }, p));
+  a.plan = (a.plan || []).map(p => Object.assign({ id: uid(), jour: '', debut: '', fin: '', sujet: '', exigences: '', interlocuteurs: '', lieu: '' }, p));
+  a.items = (a.items || []).map(it => Object.assign({ id: uid(), refId: null, clause: '', titre: '', documents: '', exigence: '', nucleaire: false, questions: [], eval: '', preuves: '' }, it, {
+    questions: (it.questions || []).map(q => typeof q === 'string' ? { q, ok: false } : Object.assign({ q: '', ok: false }, q))
+  }));
+  a.constats = (a.constats || []).map((k, i) => {
+    const c = Object.assign({ id: uid(), n: i + 1, type: 'OBS', refId: null, clause: '', processus: '', exigence: '', ecart: '', preuve: '', refFabasoft: '', itemId: null }, k);
+    if (!c.refFabasoft && k.refCAPA) c.refFabasoft = k.refCAPA;
+    ['responsable', 'echeance', 'refCAPA', 'statut'].forEach(f => delete c[f]);
+    return c;
+  });
+  return a;
+}
+
+function migrate(d) {
+  const base = { app: 'audit-iso19443', version: APP_VERSION, settings: structuredClone(SETTINGS_DEFAUT), referentiel: defaultReferentiel(), audits: [] };
+  if (!d || typeof d !== 'object') return base;
+  d.app = 'audit-iso19443'; d.version = APP_VERSION;
+  d.settings = Object.assign(structuredClone(SETTINGS_DEFAUT), d.settings || {});
+  ['cycle', 'anneeRef', 'delaiReponse'].forEach(f => delete d.settings[f]);
+  d.settings.libelles = Object.assign({}, SETTINGS_DEFAUT.libelles, (d.settings && d.settings.libelles) || {});
+  if (!Array.isArray(d.settings.processus)) d.settings.processus = splitList(d.settings.processus);
+  if (!Array.isArray(d.referentiel) || !d.referentiel.length) d.referentiel = defaultReferentiel();
+  d.referentiel = d.referentiel.map(r => Object.assign({ id: uid(), clause: '', titre: '', exigence: '', documents: '', processus: '', nucleaire: false, questions: [], source: '' }, r));
+  d.audits = Array.isArray(d.audits) ? d.audits.map(normAudit) : [];
+  return d;
+}
+
+let store = migrate(Storage.load());
+let saveTimer = null, lastSaved = null;
+function persist(now) {
+  clearTimeout(saveTimer);
+  const run = () => { if (Storage.save(store)) { lastSaved = new Date(); updateFoot(); } };
+  if (now) run(); else saveTimer = setTimeout(run, 400);
+}
+function touch(a) { if (a) a.updatedAt = new Date().toISOString(); persist(); }
+
+const ui = {
+  view: 'programme', currentId: null, tab: 'dossier', selConstat: null, cDetail: false, progSel: new Set(),
+  prog: { q: '', statut: '' },
+  prep: { q: '' },
+  terr: { q: '', filtre: '' },
+  ref: { q: '', chap: '', processus: '', nuc: false },
+  imp: null
+};
+const cur = () => store.audits.find(a => a.id === ui.currentId) || null;
+const refById = id => store.referentiel.find(r => r.id === id) || null;
+const refsSorted = () => store.referentiel.slice().sort((a, b) => cmpClause(a.clause, b.clause));
+const refProcs = r => splitList(r.processus);
+const auditLabel = a => `${a.numero || 'Sans numéro'}${a.titre ? ' : ' + a.titre : ''}`;
+const auditDate = a => a.dateDebut || a.dateFin || '';
+/* Référence affichée : celle de Fabasoft une fois le constat saisi, sinon un numéro provisoire. */
+const constatNum = (a, k) => k.refFabasoft || `${a.numero || 'AUDIT'}-${pad(k.n)}`;
+const sortedConstats = a => a.constats.slice().sort((x, y) => (SEV[y.type] - SEV[x.type]) || (x.n - y.n));
+const sortedItems = a => a.items.slice().sort((x, y) => cmpClause(x.clause, y.clause));
+
+/* Une exigence de checklist renvoie à une ou plusieurs entrées du référentiel :
+   par identifiant d'abord, sinon par numéro d'exigence (utile après un import qui remplace le référentiel). */
+function refsForClause(clause) { const n = clauseNum(clause); if (!n) return []; return store.referentiel.filter(r => clauseNum(r.clause) === n); }
+function refsForItem(it) { const r = it.refId && refById(it.refId); return r ? [r] : refsForClause(it.clause); }
+function refsForConstat(k) { const r = k.refId && refById(k.refId); return r ? [r] : refsForClause(k.clause); }
+
+function newAudit() {
+  const s = store.settings, y = String(new Date().getFullYear()).slice(2);
+  return normAudit({
+    numero: `${s.prefixe || ''}${y}-`, referentiels: s.referentiels, lieu: s.site, pilote: s.auditeur,
+    objectifs: "Évaluer la conformité du processus aux exigences de l'ISO 19443 et aux dispositions internes du SMQ, ainsi que son efficacité."
+  });
+}
+function itemFromRef(r) {
+  return { id: uid(), refId: r.id, clause: r.clause, titre: r.titre, documents: r.documents, exigence: r.exigence, nucleaire: !!r.nucleaire, questions: (r.questions || []).map(q => ({ q, ok: false })), eval: '', preuves: '' };
+}
+function itemHasData(it) { return !!(it.eval || it.preuves || it.questions.some(q => q.ok)); }
+function nextConstatN(a) { return a.constats.reduce((m, k) => Math.max(m, k.n || 0), 0) + 1; }
+function stats(a) {
+  const total = a.items.length, done = a.items.filter(i => i.eval).length;
+  const byEval = {}; a.items.forEach(i => { if (i.eval) byEval[i.eval] = (byEval[i.eval] || 0) + 1; });
+  const byType = {}; a.constats.forEach(k => byType[k.type] = (byType[k.type] || 0) + 1);
+  const nc = a.constats.filter(k => isNC(k.type)).length;
+  return { total, done, pct: total ? Math.round(100 * done / total) : 0, byEval, byType, nc };
+}
+/* Documents internes rattachés aux exigences de la checklist, sans doublon : à consulter avant l'audit. */
+function auditDocuments(a) {
+  const out = new Map();
+  sortedItems(a).forEach(it => splitList(String(it.documents || '').replace(/,/g, ';')).forEach(d => { const k = d.toUpperCase(); if (!out.has(k)) out.set(k, { doc: d, clauses: [] }); out.get(k).clauses.push(it.clause); }));
+  return [...out.values()];
+}
+
+/* =====================================================================
+   4. CALCULS : VÉRIFICATION DU RAPPORT, AIDE À LA RÉDACTION
+   ===================================================================== */
+/* Points à traiter avant d'émettre le rapport : préparation, terrain, rédaction. */
+function checkAudit(a) {
+  const issues = [], add = (level, text, goto) => issues.push(Object.assign({ level, text }, goto || {}));
+  const prep = [
+    [!!a.numero && !/-$/.test(a.numero), 'Référence Fabasoft de l’audit incomplète', 'dossier'],
+    [!!a.titre, 'Titre de l’audit non renseigné', 'dossier'],
+    [!!a.dateDebut, 'Date de l’audit non renseignée', 'dossier'],
+    [!!a.pilote, 'Auditeur responsable non renseigné', 'dossier'],
+    [a.processus.length > 0 || !!a.perimetre, 'Processus ou périmètre non renseigné', 'dossier'],
+    [!!a.objectifs, 'Objectifs non renseignés', 'dossier'],
+    [a.items.length > 0, 'Aucune exigence dans la checklist', 'preparation'],
+    [a.plan.length > 0, "Plan d'audit non établi", 'plan']
+  ];
+  prep.forEach(([ok, t, tab]) => { if (!ok) add('warn', t, { tab }); });
+  if (a.dateDebut && a.dateFin && a.dateFin < a.dateDebut) add('err', 'La date de fin précède la date de début', { tab: 'dossier' });
+  const redige = ['Rapport en rédaction', 'Rapport émis'].includes(a.statut);
+  if (!a.audites.some(p => p.nom)) add(redige ? 'err' : 'warn', 'Aucune personne rencontrée renseignée', { tab: 'dossier' });
+  const st = stats(a), nonEval = a.items.filter(i => !i.eval);
+  if (nonEval.length) add(redige ? 'err' : 'warn', `${plural(nonEval.length, 'exigence')} de la checklist non évaluée${nonEval.length > 1 ? 's' : ''}`, { tab: 'terrain', item: nonEval[0].id });
+  a.items.filter(i => isEcart(i.eval) && !a.constats.some(k => k.itemId === i.id || (k.clause && clauseNum(k.clause) === clauseNum(i.clause)))).forEach(i =>
+    add('err', `§${i.clause} évaluée ${i.eval} sans constat rédigé`, { tab: 'terrain', item: i.id }));
+  a.items.filter(i => i.eval && i.eval !== 'NA' && !i.preuves.trim()).slice(0, 5).forEach(i => add('warn', `§${i.clause} évaluée sans preuve notée`, { tab: 'terrain', item: i.id }));
+  let fieldsOk = 0, fieldsTot = 0;
+  const names = { exigence: "l'exigence de référence", ecart: "l'écart constaté", preuve: 'les preuves' };
+  a.constats.forEach(k => {
+    const num = constatNum(a, k), need = isNC(k.type) ? ['exigence', 'ecart', 'preuve'] : ['ecart', 'preuve'];
+    need.forEach(f => { fieldsTot++; if (String(k[f] || '').trim()) fieldsOk++; else add(isNC(k.type) ? 'err' : 'warn', `${num} (${k.type}) : renseigner ${names[f]}`, { tab: 'constats', constat: k.id }); });
+    if (!k.clause) add('warn', `${num} : exigence du référentiel non indiquée`, { tab: 'constats', constat: k.id });
+    redaction(k).filter(x => x.level !== 'ok').forEach(x => add('warn', `${num} : ${x.text}`, { tab: 'constats', constat: k.id }));
+  });
+  const sansRef = a.constats.filter(k => isEcart(k.type) && !k.refFabasoft);
+  if (sansRef.length && a.statut === 'Rapport émis') add('warn', `${plural(sansRef.length, 'constat')} sans référence Fabasoft`, { tab: 'constats', constat: sansRef[0].id });
+  if (redige && !a.synthese.trim()) add('warn', 'Synthèse du rapport non rédigée', { tab: 'rapport' });
+  if (a.statut === 'Rapport émis' && !a.dateEmission) add('warn', "Date d'émission du rapport non renseignée", { tab: 'rapport' });
+  const scores = {
+    preparation: Math.round(100 * prep.filter(p => p[0]).length / prep.length),
+    execution: a.items.length ? st.pct : 0,
+    constats: fieldsTot ? Math.round(100 * fieldsOk / fieldsTot) : 100
+  };
+  const order = { err: 0, warn: 1, info: 2 };
+  issues.sort((x, y) => order[x.level] - order[y.level]);
+  return { scores, issues, errors: issues.filter(i => i.level === 'err').length };
+}
+
+/* Aide à la rédaction d'un constat : un constat factuel, quantifié, sans solution imposée. */
+function redaction(k) {
+  const out = [], t = ' ' + norm(k.ecart) + ' ';
+  if (!k.ecart.trim()) return out;
+  if (k.ecart.trim().length < 30) out.push({ level: 'warn', text: "constat trop court pour être compris sans l'auditeur" });
+  const vagues = MOTS_VAGUES.filter(w => t.includes(' ' + norm(w) + ' '));
+  if (vagues.length) out.push({ level: 'warn', text: `formulation imprécise (« ${vagues.slice(0, 3).join(' », « ')} ») : indiquer le nombre de cas sur l'échantillon examiné` });
+  const sol = MOTS_SOLUTION.filter(w => t.includes(' ' + norm(w)));
+  if (sol.length && isEcart(k.type)) out.push({ level: 'warn', text: "le constat propose une solution : décrire l'écart et laisser le processus définir ses actions" });
+  if (!/\d/.test(k.ecart) && isNC(k.type)) out.push({ level: 'warn', text: 'aucune référence ni quantité citée (document, indice, nombre de cas)' });
+  if (!out.length) out.push({ level: 'ok', text: 'formulation factuelle' });
+  return out;
+}
+
+/* =====================================================================
+   5. INTERFACE COMMUNE ET VUE AUDIT
+   ===================================================================== */
+function toast(msg, ms = 4200, action) {
+  const box = $('#toast');
+  $$('div', box).forEach(x => { if (x.dataset.msg === msg) x.remove(); });
+  while (box.children.length >= 3) box.firstChild.remove();
+  const d = document.createElement('div'); d.dataset.msg = msg;
+  const t = document.createElement('span'); t.textContent = msg; d.appendChild(t);
+  if (action) { const b = document.createElement('button'); b.type = 'button'; b.textContent = action.label; b.addEventListener('click', () => { d.remove(); action.fn(); }); d.appendChild(b); }
+  box.appendChild(d);
+  setTimeout(() => d.remove(), ms);
+}
+let modalButtons = [];
+function openModal(title, body, buttons = [], wide = false) {
+  $('#modal-title').textContent = title; $('#modal-body').innerHTML = body;
+  modalButtons = buttons;
+  $('#modal-foot').innerHTML = buttons.map((b, i) => `<button class="btn ${b.cls || ''}" type="button" data-mbtn="${i}">${esc(b.label)}</button>`).join('');
+  $('#modal-box').classList.toggle('wide', !!wide);
+  $('#modal').classList.remove('hidden');
+  const f = $('#modal-body input, #modal-body textarea, #modal-body select'); if (f) setTimeout(() => f.focus(), 30);
+}
+function closeModal() { $('#modal').classList.add('hidden'); $('#modal-body').innerHTML = ''; modalButtons = []; ui.imp = null; }
+function confirmBox(title, text, okLabel, onOk, danger = true) {
+  openModal(title, `<p style="margin:0">${esc(text)}</p>`, [{ label: 'Annuler', act: closeModal }, { label: okLabel, cls: danger ? 'primary danger-bg' : 'primary', act: () => { closeModal(); onOk(); } }]);
+}
+function applyTheme() {
+  /* 'auto' suit le choix fait sur le site (clé partagée 'theme'), sinon le système */
+  const t = store.settings.theme, site = localStorage.getItem('theme');
+  const dark = t === 'dark' || (t === 'auto' && (site === 'dark' || site === 'light' ? site === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches));
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+function updateFoot() {
+  const n = store.audits.length, k = store.audits.reduce((s, a) => s + a.constats.length, 0);
+  $('#nav-foot').innerHTML = `${plural(n, 'audit')}, ${plural(k, 'constat')}<br>${lastSaved ? 'Enregistré à ' + pad(lastSaved.getHours()) + ':' + pad(lastSaved.getMinutes()) : 'Données stockées dans ce navigateur'}<br><span>Exporter régulièrement la base en JSON pour la sauvegarder.</span>`;
+}
+function updateHeader() {
+  const a = cur();
+  $('#hdr-current').innerHTML = a ? `Audit : <b>${esc(a.numero || 'Sans numéro')}</b> ${esc(a.titre)}` : '';
+  $('#nav [data-view="audit"]').disabled = !a;
+}
+const VIEWS = {};
+function showView(v) {
+  if (v === 'audit' && !cur()) v = 'programme';
+  ui.view = v;
+  $$('#nav [data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
+  (VIEWS[v] || (() => {}))();
+}
+function openAudit(id, tab) {
+  ui.currentId = id; store.settings.lastId = id; persist();
+  if (tab) ui.tab = tab;
+  ui.selConstat = null; updateHeader(); showView('audit');
+}
+function rerender() { (VIEWS[ui.view] || (() => {}))(); }
+/* Re-rendu en conservant le champ actif et la position de défilement (filtres en saisie libre). */
+function rerenderKeep(fn) {
+  const ae = document.activeElement, key = ae && (ae.dataset.f || ae.id), pos = ae && ae.selectionStart;
+  const sc = $$('.view.active, .view.active .audit-body').map(e => e.scrollTop);
+  fn();
+  $$('.view.active, .view.active .audit-body').forEach((e, i) => { if (sc[i] != null) e.scrollTop = sc[i]; });
+  if (key) { const el = $(`[data-f="${key}"]`) || document.getElementById(key); if (el) { el.focus(); try { if (pos != null) el.setSelectionRange(pos, pos); } catch (e) {} } }
+}
+
+const TABS = [['dossier', 'Dossier'], ['preparation', 'Préparation'], ['plan', "Plan d'audit"], ['terrain', 'Terrain'], ['constats', 'Constats'], ['rapport', 'Rapport'], ['controle', 'Vérification']];
+VIEWS.audit = function renderAudit() {
+  const a = cur(), v = $('#view-audit');
+  if (!a) { v.innerHTML = `<div class="audit-body"><div class="empty">Aucun audit ouvert. <button class="linkish" data-view="programme">Revenir à la liste des audits</button></div></div>`; return; }
+  const st = stats(a), chk = checkAudit(a);
+  const cnt = { preparation: a.items.length, plan: a.plan.length || '', terrain: `${st.done}/${st.total}`, constats: a.constats.length, controle: chk.errors || '' };
+  v.innerHTML = `<div class="toolbar">
+      <div class="tabs">${TABS.map(([k, l]) => `<button type="button" data-tab="${k}" class="${ui.tab === k ? 'active' : ''}">${l}${cnt[k] !== undefined && cnt[k] !== '' ? `<span class="cnt${k === 'controle' ? ' err' : ''}">${cnt[k]}</span>` : ''}</button>`).join('')}</div>
+      <div class="spacer"></div>
+      <label class="row small muted stat-lbl">Étape <select data-a="statut">${STATUTS_AUDIT.map(s => opt(s, s, a.statut)).join('')}</select></label>
+      <div class="dropdown"><button class="btn" type="button" data-act="menu" data-menu="exp-menu">Exporter</button>
+        <div class="menu" id="exp-menu">${Object.entries(Exporters).map(([k, e]) => `${e.sepBefore ? '<div class="msep"></div>' : ''}<button type="button" data-exp="${k}">${esc(e.label)}<small>${esc(e.hint)}</small></button>`).join('')}</div></div>
+    </div><div class="audit-body" id="audit-body"></div>`;
+  renderTab();
+};
+function showTab(t) { ui.tab = t; VIEWS.audit(); $('#audit-body').scrollTop = 0; }
+function renderTab() {
+  const a = cur(), body = $('#audit-body'); if (!a || !body) return;
+  body.innerHTML = `<div class="m-only m-ident"><b>${esc(a.numero || 'Sans numéro')}</b> ${esc(a.titre)}</div>` + ({ dossier: paneDossier, preparation: panePreparation, plan: panePlan, terrain: paneTerrain, constats: paneConstats, rapport: paneRapport, controle: paneControle })[ui.tab](a);
+  if (ui.tab === 'rapport') refreshPreview();
+  const at = $('.tabs button.active'); if (at && at.scrollIntoView) { const tb = at.parentElement; tb.scrollLeft = Math.max(0, at.offsetLeft - tb.clientWidth / 2 + at.clientWidth / 2); }
+}
+function refreshTabCounts() {
+  const a = cur(); if (!a || ui.view !== 'audit') return;
+  const st = stats(a), chk = checkAudit(a);
+  const set = (k, v) => { const b = $(`.tabs [data-tab="${k}"]`); if (!b) return; let c = b.querySelector('.cnt'); if (v === '' || v === 0 && k === 'controle') { if (c) c.remove(); return; } if (!c) { c = document.createElement('span'); c.className = 'cnt' + (k === 'controle' ? ' err' : ''); b.appendChild(c); } c.textContent = v; };
+  set('preparation', a.items.length); set('plan', a.plan.length || ''); set('terrain', `${st.done}/${st.total}`); set('constats', a.constats.length); set('controle', chk.errors || '');
+}
+
+/* ---------- Dossier ---------- */
+function paneDossier(a) {
+  const f = (k, l, type = 'text') => fld(l, `<input type="${type}" data-a="${k}" value="${esc(a[k])}">`);
+  const ta = (k, l, rows = 2) => fld(l, `<textarea data-a="${k}" rows="${rows}">${esc(a[k])}</textarea>`);
+  const procs = uniq([...store.settings.processus, ...a.processus]);
+  return `<div style="max-width:980px">
+    <div class="grid3">${f('numero', 'Référence Fabasoft de l’audit')}${fld("Type d'audit", `<select data-a="type">${uniq([...TYPES_AUDIT, a.type]).map(s => opt(s, s, a.type)).join('')}</select>`)}${f('lieu', 'Lieu')}</div>
+    ${f('titre', 'Titre')}
+    <div class="grid3">${f('dateDebut', 'Date de l’audit (début)', 'date')}${f('dateFin', 'Date de fin', 'date')}${fld('Étape', `<select data-a="statut">${STATUTS_AUDIT.map(s => opt(s, s, a.statut)).join('')}</select>`)}</div>
+    <div class="fld"><span class="small muted" style="font-weight:600">Processus audités</span><div class="chips" style="margin-top:4px">${procs.map(p => `<label class="chip"><input type="checkbox" data-proc="${esc(p)}"${a.processus.includes(p) ? ' checked' : ''}> ${esc(p)}</label>`).join('')}</div></div>
+    ${ta('perimetre', 'Périmètre (activités, ateliers, projets, produits)')}
+    <div class="grid2">${f('referentiels', 'Référentiels')}${ta('objectifs', 'Objectifs', 2)}</div>
+    <div class="grid3">${f('pilote', 'Auditeur responsable')}${f('auditeurs', 'Co-auditeurs')}${f('diffusion', 'Diffusion du rapport')}</div>
+    <div class="grid3">${f('verificateur', 'Rapport vérifié par')}${f('approbateur', 'Rapport approuvé par')}<div></div></div>
+    <h3>Personnes rencontrées</h3>
+    <table class="tbl resp" style="max-width:980px"><thead><tr><th style="width:34%">Nom</th><th>Fonction</th><th style="width:90px">Ouverture</th><th style="width:90px">Clôture</th><th style="width:40px"></th></tr></thead><tbody>
+    ${a.audites.map((p, i) => `<tr><td data-l="Nom"><input type="text" data-aud="${i}" data-k="nom" value="${esc(p.nom)}"></td><td data-l="Fonction"><input type="text" data-aud="${i}" data-k="fonction" value="${esc(p.fonction)}"></td>
+      <td><label class="chk"><input type="checkbox" data-aud="${i}" data-k="ouverture"${p.ouverture ? ' checked' : ''}><span class="m-only">Présent à l'ouverture</span></label></td><td><label class="chk"><input type="checkbox" data-aud="${i}" data-k="cloture"${p.cloture ? ' checked' : ''}><span class="m-only">Présent à la clôture</span></label></td>
+      <td><button class="btn ghost sm danger" type="button" data-act="aud-del" data-i="${i}" title="Retirer">Retirer</button></td></tr>`).join('') || `<tr><td colspan="5" class="muted">Aucune personne renseignée.</td></tr>`}
+    </tbody></table>
+    <div class="row" style="margin-top:8px"><button class="btn sm" type="button" data-act="aud-add">Ajouter une personne</button><span class="small muted">Les cases Ouverture et Clôture alimentent la liste de présence du rapport.</span></div>
+    <p class="small muted" style="margin-top:18px">Créé le ${fmtDateTime(a.createdAt)}, modifié le ${fmtDateTime(a.updatedAt)}${a.lastExport ? `, dernier export le ${fmtDateTime(a.lastExport)}` : ', jamais exporté'}.</p>
+    <div class="danger-zone"><h3>Supprimer cet audit</h3><p class="small muted" style="margin:0 0 8px">Supprime le dossier, la checklist et les constats de cet appareil. Exporter l'audit en JSON ou en Word avant, si les données doivent être conservées.</p>
+      <button class="btn danger" type="button" data-act="del-audit" data-id="${a.id}">Supprimer l'audit</button></div>
+  </div>`;
+}
+
+/* ---------- Préparation ---------- */
+function panePreparation(a) {
+  const q = norm(ui.prep.q);
+  const sel = new Set(a.items.map(i => i.refId).filter(Boolean));
+  const refs = refsSorted().filter(r => !q || norm(`${r.clause} ${r.titre} ${r.documents} ${r.processus} ${r.exigence}`).includes(q));
+  const groups = {}; refs.forEach(r => (groups[chapOf(r.clause)] = groups[chapOf(r.clause)] || []).push(r));
+  const free = a.items.filter(i => !i.refId || !refById(i.refId));
+  const minutes = a.items.length * (Number(store.settings.minutesParExigence) || 15);
+  const procCount = a.processus.length ? refsSorted().filter(r => refProcs(r).some(p => a.processus.includes(p))).length : 0;
+  const docs = auditDocuments(a);
+  let h = `<div class="two-col"><div>
+    <div class="box"><h3>Éléments d'entrée</h3>
+      <p class="hint">Ce qu'il faut avoir en tête avant l'audit : constats des audits précédents, FNC et réclamations du processus, indicateurs, changements récents. Repris dans le plan d'audit.</p>
+      <textarea data-a="entrees" rows="4" placeholder="Ex. NCm de l'audit précédent sur la maîtrise documentaire ; 3 FNC réception depuis janvier ; nouveau fournisseur de fonderie">${esc(a.entrees)}</textarea></div>
+    <h3 style="margin-top:4px">Exigences à auditer</h3>
+    <p class="lead" style="margin-bottom:10px">Coche les exigences à auditer, ou ajoute d'un coup celles des processus cochés dans le dossier.</p>
+    <div class="filters"><input type="search" data-f="prep.q" placeholder="Rechercher une exigence, un document, un processus" value="${esc(ui.prep.q)}"></div>`;
+  Object.keys(groups).sort((x, y) => (Number(x) || 999) - (Number(y) || 999)).forEach(ch => {
+    const list = groups[ch], nSel = list.filter(r => sel.has(r.id)).length;
+    h += `<div class="chap"><label class="chap-head"><input type="checkbox" data-prep-chap="${esc(ch)}"${nSel === list.length ? ' checked' : ''}> ${esc(chapLabel(ch))} <span class="muted small">${nSel} sur ${list.length}</span></label>`;
+    list.forEach(r => {
+      const tags = [];
+      if (r.nucleaire) tags.push('<span class="tag nuc">19443</span>');
+      if (refProcs(r).some(p => a.processus.includes(p))) tags.push('<span class="tag">Processus audité</span>');
+      h += `<label class="ref-row"><input type="checkbox" data-prep-ref="${esc(r.id)}"${sel.has(r.id) ? ' checked' : ''}><span class="cl">${esc(r.clause)}</span>
+        <span>${esc(r.titre)}${r.documents ? `<div class="docs">${esc(truncate(r.documents, 160))}</div>` : ''}</span><span class="tags">${tags.join('')}</span></label>`;
+    });
+    h += `</div>`;
+  });
+  if (!refs.length) h += `<div class="empty">Aucune exigence ne correspond à la recherche.</div>`;
+  h += `</div><div class="side prep-side">
+    <div class="box"><h3>Checklist</h3>
+      <div class="kpi" style="margin-bottom:10px"><div class="v">${a.items.length}</div><div class="l">exigences retenues, durée estimée ${Math.floor(minutes / 60)} h ${pad(minutes % 60)}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn" type="button" data-act="prep-proc"${a.processus.length ? '' : ' disabled'}>Ajouter les exigences des processus du dossier${procCount ? ` (${procCount})` : ''}</button>
+        <button class="btn" type="button" data-tab="plan">Établir le plan d'audit</button>
+        <button class="btn" type="button" data-exp="checklist">Imprimer la checklist</button>
+        <button class="btn ghost danger" type="button" data-act="prep-clear"${a.items.length ? '' : ' disabled'}>Vider la checklist</button>
+      </div>
+      <p class="hint" style="margin-top:10px">Durée estimée sur la base de ${store.settings.minutesParExigence} min par exigence (réglable dans Paramètres).</p>
+    </div>
+    <div class="box"><h3>Documents à consulter</h3>
+      ${docs.length ? `<p class="hint">Documents internes rattachés aux exigences retenues, à relire avant l'audit et à demander à l'audité.</p><ul class="small" style="margin:0;padding-left:18px">${docs.map(d => `<li><b>${esc(d.doc)}</b> <span class="muted">§${esc(uniq(d.clauses).join(', §'))}</span></li>`).join('')}</ul>`
+        : `<p class="hint" style="margin:0">Aucun document rattaché aux exigences retenues. Importer la synthèse ISO 19443 dans le référentiel pour les faire apparaître ici.</p>`}
+    </div>
+    <div class="box"><h3>Point hors référentiel</h3>
+      <p class="hint">Exigence client, point de procédure interne ou thème libre.</p>
+      ${fld('Repère', '<input type="text" id="free-clause" placeholder="Ex. 8.4.3 ou EDF">')}
+      ${fld('Intitulé', '<input type="text" id="free-titre" placeholder="Ex. Exigences de surveillance du client dans les commandes">')}
+      <button class="btn sm" type="button" data-act="prep-free">Ajouter à la checklist</button>
+      ${free.length ? `<h4>Points libres de cet audit</h4>${free.map(i => `<div class="row small" style="justify-content:space-between"><span><b>${esc(i.clause)}</b> ${esc(i.titre)}</span><button class="btn ghost sm danger" type="button" data-act="item-del" data-id="${i.id}">Retirer</button></div>`).join('')}` : ''}
+    </div></div></div>`;
+  return h;
+}
+
+/* ---------- Plan d'audit ---------- */
+const toMin = t => { const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+const toHHMM = n => `${pad(Math.floor(n / 60) % 24)}:${pad(n % 60)}`;
+/* Proposition : ouverture, une séquence par processus (ou par chapitre), synthèse des auditeurs, clôture.
+   Les durées découlent du nombre d'exigences ; une pause déjeuner est insérée après 12 h. */
+function proposePlan(a) {
+  const per = Number(store.settings.minutesParExigence) || 15;
+  let t = toMin(store.settings.heureDebut) ?? 510;
+  const rows = [], who = a.audites.filter(p => p.nom).map(p => p.nom).join(', ');
+  const push = (sujet, dur, extra = {}) => {
+    if (t < 720 && t + dur > 735 && dur >= 30) { rows.push({ id: uid(), debut: toHHMM(Math.max(t, 720)), fin: toHHMM(Math.max(t, 720) + 60), sujet: 'Pause déjeuner', exigences: '', interlocuteurs: '', lieu: '' }); t = Math.max(t, 720) + 60; }
+    rows.push(Object.assign({ id: uid(), debut: toHHMM(t), fin: toHHMM(t + dur), sujet, exigences: '', interlocuteurs: '', lieu: '' }, extra)); t += dur;
+  };
+  push("Réunion d'ouverture : objectifs, périmètre, déroulement", 15, { interlocuteurs: who });
+  const items = sortedItems(a), groups = [], seen = new Map();
+  items.forEach(it => {
+    const r = it.refId && refById(it.refId);
+    const p = (r && refProcs(r).find(x => a.processus.includes(x))) || chapLabel(chapOf(it.clause));
+    if (!seen.has(p)) { seen.set(p, { sujet: p, clauses: [] }); groups.push(seen.get(p)); }
+    seen.get(p).clauses.push(it.clause);
+  });
+  groups.forEach(g => push(g.sujet, Math.max(15, Math.ceil(g.clauses.length * per / 15) * 15), { exigences: g.clauses.map(c => '§' + c).join(', ') }));
+  push('Synthèse des auditeurs', 30);
+  push('Réunion de clôture : présentation des constats', 30, { interlocuteurs: who });
+  return rows;
+}
+function panePlan(a) {
+  const rows = a.plan;
+  const inp = (i, k, ph = '', type = 'text', w = '') => `<input type="${type}" data-plan="${i}" data-k="${k}" value="${esc(rows[i][k])}" placeholder="${esc(ph)}"${w ? ` style="width:${w}"` : ''}>`;
+  let h = `<p class="lead">Déroulé prévu de l'audit, à transmettre à l'audité avant la visite. La proposition automatique part de la checklist et des personnes rencontrées ; tout reste modifiable.</p>
+    <div class="row" style="margin-bottom:12px"><button class="btn primary" type="button" data-act="plan-propose">${rows.length ? 'Proposer à nouveau à partir de la checklist' : 'Proposer un plan à partir de la checklist'}</button>
+      <button class="btn" type="button" data-act="plan-add">Ajouter une séquence</button><span class="spacer"></span><button class="btn" type="button" data-exp="plan">Plan d'audit Word (.docx)</button></div>`;
+  if (!rows.length) return h + `<div class="empty">Aucune séquence. ${a.items.length ? 'Utiliser la proposition automatique ou ajouter une séquence.' : "Préparer d'abord la checklist dans l'onglet Préparation, puis proposer un plan."}</div>`;
+  const multi = a.dateFin && a.dateDebut && a.dateFin !== a.dateDebut;
+  h += `<table class="tbl resp plan-tbl"><thead><tr>${multi ? '<th style="width:130px">Jour</th>' : ''}<th style="width:86px">Début</th><th style="width:86px">Fin</th><th>Séquence</th><th style="width:150px">Exigences</th><th>Interlocuteurs</th><th style="width:120px">Lieu</th><th style="width:110px"></th></tr></thead><tbody>
+    ${rows.map((r, i) => `<tr>${multi ? `<td data-l="Jour">${inp(i, 'jour', '', 'date')}</td>` : ''}<td data-l="Début">${inp(i, 'debut', '08:30', 'time')}</td><td data-l="Fin">${inp(i, 'fin', '09:00', 'time')}</td>
+      <td data-l="Séquence">${inp(i, 'sujet', 'Thème, activité ou processus')}</td><td data-l="Exigences">${inp(i, 'exigences', 'Ex. §8.4.2')}</td><td data-l="Interlocuteurs">${inp(i, 'interlocuteurs', 'Fonctions ou noms')}</td><td data-l="Lieu">${inp(i, 'lieu', 'Atelier, bureau')}</td>
+      <td class="nowrap acts"><button class="btn ghost sm" type="button" data-act="plan-up" data-i="${i}" title="Monter"${i ? '' : ' disabled'}>Monter</button><button class="btn ghost sm danger" type="button" data-act="plan-del" data-i="${i}">Retirer</button></td></tr>`).join('')}
+    </tbody></table>`;
+  const docs = auditDocuments(a);
+  h += `<p class="hint" style="margin-top:10px">Le plan Word reprend aussi les objectifs, le périmètre, les éléments d'entrée${docs.length ? ` et ${plural(docs.length, 'document')} à tenir à disposition` : ''}.</p>`;
+  return h;
+}
+
+function addRefsToAudit(a, refs) {
+  const have = new Set(a.items.map(i => i.refId)); let n = 0;
+  refs.forEach(r => { if (!have.has(r.id)) { a.items.push(itemFromRef(r)); have.add(r.id); n++; } });
+  return n;
+}
+function removeItems(a, ids, cb) {
+  const withData = a.items.filter(i => ids.includes(i.id) && itemHasData(i));
+  const doIt = () => { a.items = a.items.filter(i => !ids.includes(i.id)); a.constats.forEach(k => { if (ids.includes(k.itemId)) k.itemId = null; }); touch(a); cb && cb(); };
+  if (withData.length) confirmBox('Retirer des exigences évaluées', `${plural(withData.length, 'exigence')} déjà évaluée${withData.length > 1 ? 's' : ''} ou annotée${withData.length > 1 ? 's' : ''} : les évaluations et preuves seront perdues. Les constats rédigés sont conservés.`, 'Retirer', doIt);
+  else doIt();
+}
+
+/* ---------- Terrain ---------- */
+function paneTerrain(a) {
+  const st = stats(a);
+  if (!a.items.length) return `<div class="empty">La checklist est vide. <button class="linkish" data-tab="preparation">Préparer l'audit</button></div>`;
+  const q = norm(ui.terr.q), fl = ui.terr.filtre;
+  const items = sortedItems(a).filter(i => (!q || norm(`${i.clause} ${i.titre} ${i.documents} ${i.preuves} ${i.questions.map(x => x.q).join(' ')}`).includes(q))
+    && (!fl || (fl === 'todo' && !i.eval) || (fl === 'ecarts' && isEcart(i.eval)) || (fl === 'plus' && (i.eval === 'PF' || i.eval === 'PP'))));
+  let h = `<div class="sticky-bar"><div class="progress"><span class="progress" id="terr-progress" style="flex:1;min-width:0">${terrProgress(a, st)}</span><button class="btn sm" type="button" data-act="next-todo">Suivante à évaluer</button></div></div>
+    <div class="filters"><input type="search" data-f="terr.q" placeholder="Rechercher" value="${esc(ui.terr.q)}">
+      <select data-f="terr.filtre">${[['', 'Toutes les exigences'], ['todo', 'Non évaluées'], ['ecarts', 'Écarts (OBS, NC)'], ['plus', 'Points forts et pistes de progrès']].map(([v, l]) => opt(v, l, fl)).join('')}</select>
+      <span class="spacer"></span><button class="btn sm" type="button" data-exp="checklist">Imprimer la checklist</button></div>`;
+  let lastCh = null;
+  items.forEach(it => {
+    const ch = chapOf(it.clause);
+    if (ch !== lastCh) { h += `<div class="chap-title">${esc(chapLabel(ch))}</div>`; lastCh = ch; }
+    h += itemCard(a, it);
+  });
+  if (!items.length) h += `<div class="empty">Aucune exigence ne correspond au filtre.</div>`;
+  return h;
+}
+function terrProgress(a, st) {
+  st = st || stats(a);
+  return `<b>${st.done} sur ${st.total}</b> <span class="lg-only">évaluées</span> <div class="meter" style="min-width:80px"><span style="width:${st.pct}%"></span></div>
+    <span class="row" style="gap:5px">${EVALS.filter(e => st.byEval[e.code]).map(e => `<span class="badge e-${e.code}">${e.code} ${st.byEval[e.code]}</span>`).join('')}</span>`;
+}
+function itemCard(a, it) {
+  const linked = a.constats.filter(k => k.itemId === it.id);
+  return `<div class="item e-${esc(it.eval)}" id="item-${it.id}" data-item="${it.id}">
+    <div class="item-head"><span class="cl">${esc(it.clause)}</span><span class="tt">${esc(it.titre)} ${it.nucleaire ? '<span class="tag nuc">19443</span>' : ''}</span>
+      <div class="seg">${EVALS.map(e => `<button type="button" class="e-${e.code}${it.eval === e.code ? ' on' : ''}" data-eval="${e.code}" title="${esc(evalLabel(e.code))}">${e.code}</button>`).join('')}</div></div>
+    ${it.documents ? `<div class="item-docs">Documents internes : ${esc(it.documents)}</div>` : ''}
+    ${it.exigence ? `<div class="item-req">${esc(it.exigence)}</div>` : ''}
+    <ol class="qs">${it.questions.map((x, i) => `<li><label class="${x.ok ? 'done' : ''}"><input type="checkbox" data-q="${i}"${x.ok ? ' checked' : ''}><span>${esc(x.q)}</span></label></li>`).join('')}</ol>
+    <div class="body">
+      <textarea data-item-f="preuves" rows="2" placeholder="Preuves examinées (documents, indices, échantillon), personnes rencontrées, constatations">${esc(it.preuves)}</textarea>
+      <div class="foot">
+        <button class="btn sm" type="button" data-act="item-constat">Rédiger un constat</button>
+        ${linked.map(k => `<button class="btn sm ghost" type="button" data-goto-constat="${k.id}">${badge(k.type)} ${esc(constatNum(a, k))}</button>`).join('')}
+        <input type="text" data-qadd placeholder="Ajouter une question puis Entrée" style="max-width:300px;margin-left:auto">
+        <button class="btn sm ghost danger" type="button" data-act="item-del">Retirer</button>
+      </div>
+    </div></div>`;
+}
+function refreshItem(a, it) {
+  const el = $('#item-' + it.id); if (el) el.outerHTML = itemCard(a, it);
+  const p = $('#terr-progress'); if (p) p.innerHTML = terrProgress(a);
+  refreshTabCounts();
+}
+
+/* ---------- Constats ---------- */
+function newConstat(a, from) {
+  const k = { id: uid(), n: nextConstatN(a), type: 'OBS', refId: null, clause: '', processus: a.processus[0] || '', exigence: '', ecart: '', preuve: '', refFabasoft: '', itemId: null };
+  if (from) {
+    k.type = CONSTAT_TYPES.includes(from.eval) ? from.eval : 'OBS';
+    k.refId = from.refId; k.clause = from.clause; k.itemId = from.id; k.preuve = from.preuves;
+    k.exigence = exigenceText(from);
+    const r = from.refId && refById(from.refId);
+    if (r) { const p = refProcs(r).find(x => a.processus.includes(x)); if (p) k.processus = p; }
+  }
+  a.constats.push(k);
+  return k;
+}
+function exigenceText(src) {
+  const ref = src.refId && refById(src.refId);
+  const clause = src.clause || (ref && ref.clause) || '', titre = src.titre || (ref && ref.titre) || '', docs = src.documents ?? (ref && ref.documents) ?? '';
+  const exi = src.exigence ?? (ref && ref.exigence) ?? '';
+  const refName = (cur() && cur().referentiels ? splitList(cur().referentiels)[0] : 'ISO 19443') || 'ISO 19443';
+  return [clause ? `${refName} §${clause} ${titre}`.trim() : titre, exi, docs ? 'Documents internes : ' + docs : ''].filter(Boolean).join('\n');
+}
+function paneConstats(a) {
+  const list = sortedConstats(a);
+  if (!ui.selConstat || !a.constats.some(k => k.id === ui.selConstat)) ui.selConstat = list[0] ? list[0].id : null;
+  const k = a.constats.find(x => x.id === ui.selConstat);
+  let h = `<div class="cgrid ${ui.cDetail && k ? 'show-detail' : 'show-list'}"><div class="ccol-list">
+    <div class="row" style="margin-bottom:8px"><button class="btn primary sm" type="button" data-act="c-new">Nouveau constat</button>${a.constats.length ? '<button class="btn sm" type="button" data-act="c-copy-all">Copier tous les constats</button>' : ''}<span class="small muted">${plural(a.constats.length, 'constat')}</span></div>
+    <div class="clist" id="clist">${clistHTML(a, list)}</div></div><div class="ccol-form">
+    <button class="btn sm m-only" type="button" data-act="c-back" style="margin-bottom:8px">Retour à la liste des constats</button>`;
+  if (!k) h += `<div class="empty">Aucun constat. Les constats se rédigent depuis l'onglet Terrain (bouton Rédiger un constat) ou avec Nouveau constat.</div>`;
+  else h += constatForm(a, k);
+  return h + `</div></div>`;
+}
+function clistHTML(a, list) {
+  return (list || sortedConstats(a)).map(k => `<button type="button" class="${k.id === ui.selConstat ? 'active' : ''}" data-sel-constat="${k.id}">${badge(k.type)} <b>${esc(constatNum(a, k))}</b> ${k.clause ? '<span class="muted">§' + esc(k.clause) + '</span>' : ''} ${isEcart(k.type) && !k.refFabasoft ? '<span class="tag">À saisir dans Fabasoft</span>' : ''}<span class="t">${esc(truncate(k.ecart, 80)) || '<i>Constat à rédiger</i>'}</span></button>`).join('') || '<div class="small muted" style="padding:10px">Aucun constat.</div>';
+}
+function constatForm(a, k) {
+  const refs = refsSorted();
+  const clauseOpts = [opt('', 'Hors référentiel', k.refId || '')].concat(refs.map(r => opt(r.id, `${r.clause}  ${truncate(r.titre, 70)}`, k.refId)));
+  if (!k.refId && k.clause) clauseOpts.push(opt('__free', `${k.clause} (point libre)`, '__free'));
+  const procs = uniq([...store.settings.processus, ...a.processus, k.processus].filter(Boolean));
+  const ta = (f, l, rows, ph = '') => fld(l, `<textarea data-c="${f}" rows="${rows}" placeholder="${esc(ph)}">${esc(k[f])}</textarea>`);
+  return `<div class="box">
+    <div class="row" style="justify-content:space-between;margin-bottom:10px"><h3 style="margin:0">${esc(constatNum(a, k))}</h3>
+      <div class="row">${k.itemId ? `<button class="btn sm ghost" type="button" data-goto-item="${k.itemId}">Voir dans la checklist</button>` : ''}<button class="btn sm ghost danger" type="button" data-act="c-del">Supprimer</button></div></div>
+    <div class="grid3">${fld('Type', `<select data-c="type">${CONSTAT_TYPES.map(t => opt(t, `${t}  ${evalLabel(t)}`, k.type)).join('')}</select>`)}
+      ${fld('Exigence du référentiel', `<select data-c="refId">${clauseOpts.join('')}</select>`)}
+      ${fld('Processus', `<select data-c="processus">${[opt('', 'Non renseigné', k.processus)].concat(procs.map(p => opt(p, p, k.processus))).join('')}</select>`)}</div>
+    ${ta('exigence', 'Exigence de référence (norme, procédure interne, exigence client)', 3, 'Ex. ISO 19443 §7.5.3 ; procédure AQ… indice …')}
+    <div class="row" style="margin:-4px 0 10px"><button class="btn sm ghost" type="button" data-act="c-fill-req">Reprendre l'exigence et les documents du référentiel</button></div>
+    ${ta('ecart', 'Constat (écart factuel)', 3, 'Ce qui a été observé, quantifié sur l’échantillon examiné')}
+    ${ta('preuve', 'Preuves objectives', 2, 'Documents, indices, numéros d’OF, enregistrements, personnes interrogées')}
+    <div class="grid2">${fld('Référence du constat dans Fabasoft', `<input type="text" data-c="refFabasoft" value="${esc(k.refFabasoft)}" placeholder="À renseigner après saisie dans Fabasoft">`)}
+      <div class="fld"><span>&nbsp;</span><button class="btn" type="button" data-act="c-copy">Copier le constat pour Fabasoft</button></div></div>
+    <div class="aid" id="c-aid">${aidHTML(a, k)}</div></div>`;
+}
+function aidHTML(a, k) {
+  const rows = [];
+  const L = { exigence: ['Exigence de référence renseignée', 'Exigence de référence à renseigner'], ecart: ['Écart décrit', 'Écart constaté à décrire'], preuve: ['Preuves renseignées', 'Preuves objectives à renseigner'] };
+  const need = isNC(k.type) ? ['exigence', 'ecart', 'preuve'] : ['ecart', 'preuve'];
+  need.forEach(f => rows.push(String(k[f] || '').trim() ? { level: 'ok', text: L[f][0] } : { level: isNC(k.type) ? 'err' : 'warn', text: L[f][1] }));
+  redaction(k).forEach(x => rows.push(x));
+  return `<b>Aide à la rédaction</b> <span class="muted small">Un constat ${isNC(k.type) ? 'de non-conformité relie une exigence, un écart factuel et des preuves' : 'décrit des faits vérifiables'}.</span>
+    <ul>${rows.map(x => `<li class="${x.level}">${esc(x.text.charAt(0).toUpperCase() + x.text.slice(1))}</li>`).join('')}</ul>`;
+}
+/* Texte prêt à coller dans la fiche Fabasoft : type, exigence, écart, preuves. */
+function constatText(a, k) {
+  return [`${evalLabel(k.type)} (${k.type})${k.clause ? ', §' + k.clause : ''}`, k.exigence ? 'Exigence : ' + k.exigence : '', 'Constat : ' + (k.ecart || ''), k.preuve ? 'Preuves : ' + k.preuve : '', k.processus ? 'Processus : ' + k.processus : '', `Audit : ${a.numero}${a.titre ? ' ' + a.titre : ''}`].filter(Boolean).join('\n');
+}
+
+/* ---------- Rapport ---------- */
+function draftSynthese(a) {
+  const st = stats(a), list = sortedConstats(a);
+  const procs = a.processus.length ? a.processus.join(', ') : (a.perimetre || 'le périmètre défini');
+  const ref = splitList(a.referentiels)[0] || 'ISO 19443';
+  const parts = [];
+  parts.push(`L'audit a porté sur ${procs}${a.dateDebut ? (a.dateFin && a.dateFin !== a.dateDebut ? `, du ${fmtDate(a.dateDebut)} au ${fmtDate(a.dateFin)}` : `, le ${fmtDate(a.dateDebut)}`) : ''}. ${plural(st.done, 'exigence')} du référentiel ${ref} ${st.done > 1 ? 'ont été évaluées' : 'a été évaluée'} sur ${st.total} prévue${st.total > 1 ? 's' : ''}.`);
+  const counts = CONSTAT_TYPES.filter(t => st.byType[t]).map(t => `${st.byType[t]} ${typeLabel(t, st.byType[t])}`);
+  parts.push(a.constats.length ? `${plural(a.constats.length, 'constat')} ${a.constats.length > 1 ? 'ont été relevés' : 'a été relevé'} : ${counts.join(', ')}.` : 'Aucun constat n’a été relevé.');
+  const ecarts = list.filter(k => isEcart(k.type) && k.clause);
+  if (ecarts.length) parts.push(`${ecarts.length > 1 ? 'Les écarts portent' : "L'écart porte"} sur ${uniq(ecarts.map(k => '§' + clauseNum(k.clause))).join(', ')}.`);
+  const pf = list.filter(k => k.type === 'PF');
+  if (pf.length) parts.push(`Points forts relevés : ${pf.map(k => k.ecart.trim().replace(/[.\s]+$/, '')).join(' ; ')}.`);
+  return parts.join('\n\n');
+}
+function paneRapport(a) {
+  const st = stats(a), o = a.options;
+  const rows = CONSTAT_TYPES.map(t => `<tr><td>${badge(t)} ${esc(evalLabel(t))}</td><td class="num">${st.byType[t] || 0}</td></tr>`).join('');
+  const chk = (k, l) => `<label class="chk fld"><input type="checkbox" data-opt="${k}"${o[k] ? ' checked' : ''}> ${esc(l)}</label>`;
+  return `<div class="two-col"><div>
+    <div class="grid3">${fld('Indice du rapport', `<input type="text" data-a="indice" value="${esc(a.indice)}" placeholder="A">`)}${fld("Date d'émission", `<input type="date" data-a="dateEmission" value="${esc(a.dateEmission)}">`)}${fld('Étape', `<select data-a="statut">${STATUTS_AUDIT.map(s => opt(s, s, a.statut)).join('')}</select>`)}</div>
+    ${fld('Appréciation globale', `<select data-a="appreciation">${APPRECIATIONS.map(s => opt(s, s || 'Non renseignée', a.appreciation)).join('')}</select>`)}
+    ${fld('Synthèse du rapport', `<textarea data-a="synthese" rows="9" placeholder="Principaux enseignements, points forts, écarts, efficacité du processus">${esc(a.synthese)}</textarea>`)}
+    <div class="row" style="margin-bottom:14px"><button class="btn sm" type="button" data-act="draft-synthese">Proposer une synthèse à partir des données</button><span class="small muted">Le texte proposé reste modifiable.</span></div>
+  </div><div class="side">
+    <div class="box"><h3>Livrables</h3><div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn primary" type="button" data-exp="docx">Rapport Word (.docx)</button>
+      <button class="btn" type="button" data-exp="pdf">Rapport PDF</button>
+      ${a.constats.length ? '<button class="btn" type="button" data-act="c-copy-all">Copier tous les constats</button>' : ''}
+      <button class="btn" type="button" data-exp="json">Transférer l'audit (JSON)</button></div></div>
+    <div class="box"><h3>Contenu du rapport</h3>
+      ${chk('documents', 'Liste des documents internes de référence')}${chk('checklist', 'Détail de la checklist (évaluation et preuves)')}${chk('questions', 'Questions posées dans le détail de la checklist')}
+      <p class="hint" style="margin:0">La mention de fin de rapport se règle dans Paramètres.</p></div>
+    <div class="box"><h3>Bilan</h3><table class="tbl"><tbody>${rows}
+      <tr><td>Exigences évaluées</td><td class="num">${st.done} / ${st.total}</td></tr></tbody></table></div>
+  </div></div>
+  <h3>Aperçu du rapport</h3>
+  <iframe id="report-preview" class="preview-frame" title="Aperçu du rapport"></iframe>`;
+}
+/* L'aperçu est le rapport tel qu'il sera imprimé, régénéré après chaque modification. */
+function refreshPreview() {
+  const a = cur(), fr = $('#report-preview'); if (!a || !fr) return;
+  fr.srcdoc = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><style>${PRINT_CSS} body{padding:10mm 12mm;background:#fff} @media (max-width:600px){body{padding:4mm}}</style></head><body>${reportBody(a)}</body></html>`;
+}
+const debouncedPreview = debounce(refreshPreview, 500);
+
+/* ---------- Vérification avant émission ---------- */
+function paneControle(a) {
+  const chk = checkAudit(a);
+  const sc = (l, v) => `<div class="score"><div class="lbl"><span>${l}</span><b>${v} %</b></div><div class="meter"><span style="width:${v}%"></span></div></div>`;
+  let h = `<p class="lead">Points à traiter avant d'émettre le rapport, recalculés à chaque modification. Un clic sur un point ouvre l'endroit à corriger.</p>`;
+  h += sc('Préparation', chk.scores.preparation) + sc('Terrain : exigences évaluées', chk.scores.execution) + sc('Rédaction des constats', chk.scores.constats);
+  h += `<h3>Points à traiter</h3>`;
+  if (!chk.issues.length) h += `<div class="issue info">Aucun point à traiter.</div>`;
+  chk.issues.forEach(i => h += `<button class="issue ${i.level}" type="button" ${i.tab ? `data-goto-tab="${i.tab}"` : ''} ${i.item ? `data-goto-item="${i.item}"` : ''} ${i.constat ? `data-goto-constat="${i.constat}"` : ''}>${esc(i.text)}</button>`);
+  return h;
+}
+
+/* =====================================================================
+   6. VUES TRANSVERSES
+   ===================================================================== */
+
+/* ---------- Mes audits ---------- */
+VIEWS.programme = function renderProgramme() {
+  const v = $('#view-programme'), f = ui.prog, q = norm(f.q);
+  if (!store.audits.length) {
+    v.innerHTML = `<h2>Mes audits</h2><div class="box welcome"><h3>Bienvenue</h3>
+      <p class="small" style="margin-top:0">Cet outil aide l'auditeur à préparer l'audit et à constituer le rapport, sur ordinateur comme sur téléphone. Le suivi des constats et des actions reste dans Fabasoft. Les données restent sur cet appareil : exporter chaque audit en JSON pour le transmettre ou le sauvegarder.</p>
+      ${fld("Nom de l'auditeur (prérempli dans les nouveaux audits)", `<input type="text" data-s="auditeur" value="${esc(store.settings.auditeur)}" placeholder="Prénom Nom">`)}
+      <div class="row"><button class="btn primary" type="button" data-act="new-audit">Créer un audit</button><button class="btn" type="button" data-base="import-json">Importer un audit reçu (JSON)</button><button class="btn" type="button" data-base="examples">Charger les exemples</button></div></div>`;
+    return;
+  }
+  const list = store.audits.filter(a => (!f.statut || a.statut === f.statut)
+    && (!q || norm(`${a.numero} ${a.titre} ${a.perimetre} ${a.processus.join(' ')} ${a.pilote} ${a.auditeurs}`).includes(q)))
+    .sort((x, y) => (auditDate(y) || '9999').localeCompare(auditDate(x) || '9999'));
+  const count = s => store.audits.filter(a => a.statut === s).length;
+  let h = `<h2>Mes audits</h2><p class="lead">Un audit se prépare, se conduit sur le terrain puis donne un rapport. Un clic sur une ligne ouvre l'audit.</p>
+    <div class="filters">
+      <input type="search" data-f="prog.q" placeholder="Rechercher (référence, titre, processus, auditeur)" value="${esc(f.q)}">
+      <select data-f="prog.statut">${opt('', `Toutes les étapes (${store.audits.length})`, f.statut)}${STATUTS_AUDIT.map(s => opt(s, `${s} (${count(s)})`, f.statut)).join('')}</select>
+    </div>`;
+  const notExp = store.audits.filter(a => !a.lastExport || a.lastExport < a.updatedAt);
+  if (notExp.length) h += `<div class="warnbox row"><span style="flex:1;min-width:220px">${plural(notExp.length, 'audit')} ${notExp.length > 1 ? 'modifiés' : 'modifié'} depuis le dernier export. Les données ne sont conservées que dans ce navigateur, sur cet appareil.</span><button class="btn sm" type="button" data-base="export-json">Exporter la base (JSON)</button></div>`;
+  ui.progSel = new Set([...(ui.progSel || [])].filter(id => store.audits.some(a => a.id === id)));
+  const sel = ui.progSel;
+  if (sel.size) h += `<div class="selbar"><b>${plural(sel.size, 'audit sélectionné', 'audits sélectionnés')}</b><span class="spacer"></span>
+    <button class="btn sm" type="button" data-act="sel-export">Exporter la sélection (JSON)</button><button class="btn sm danger" type="button" data-act="sel-del">Supprimer la sélection</button><button class="btn sm ghost" type="button" data-act="sel-clear">Désélectionner</button></div>`;
+  const allSel = list.length && list.every(a => sel.has(a.id));
+  h += `<table class="tbl resp"><thead><tr><th class="selcell"><input type="checkbox" data-sel-all title="Tout sélectionner"${allSel ? ' checked' : ''}></th><th>Référence</th><th>Titre</th><th>Processus</th><th>Dates</th><th>Auditeur</th><th>Étape</th><th>Terrain</th><th>Constats</th><th></th></tr></thead><tbody>`;
+  list.forEach(a => {
+    const st = stats(a);
+    h += `<tr class="click" data-open="${a.id}"><td class="selcell"><label class="chk"><input type="checkbox" data-sel-audit="${a.id}"${sel.has(a.id) ? ' checked' : ''}><span class="m-only small muted">Sélectionner</span></label></td>
+      <td class="nowrap" data-l="Référence"><b>${esc(a.numero)}</b></td><td data-l="Titre">${esc(a.titre)}<div class="small muted">${esc(a.type)}</div></td>
+      <td class="small" data-l="Processus">${esc(a.processus.join(', ') || truncate(a.perimetre, 60))}</td>
+      <td class="nowrap small" data-l="Dates">${fmtDate(a.dateDebut)}${a.dateFin && a.dateFin !== a.dateDebut ? ' au ' + fmtDate(a.dateFin) : ''}</td>
+      <td class="small" data-l="Auditeur">${esc(a.pilote)}</td><td class="nowrap" data-l="Étape">${esc(a.statut)}${a.statut === 'Rapport émis' && a.indice ? `<div class="small muted">Indice ${esc(a.indice)}</div>` : ''}</td>
+      <td style="min-width:110px" data-l="Terrain"><div class="meter" style="min-width:80px"><span style="width:${st.pct}%"></span></div><span class="small muted">${st.done}/${st.total} évaluées</span></td>
+      <td class="nowrap" data-l="Constats">${CONSTAT_TYPES.filter(t => st.byType[t]).map(t => `<span class="badge e-${t}">${t} ${st.byType[t]}</span>`).join(' ') || '<span class="muted small">Aucun</span>'}</td>
+      <td class="nowrap acts"><button class="btn ghost sm" type="button" data-act="dup-audit" data-id="${a.id}" title="Nouvel audit sur le même périmètre, avec la même checklist">Dupliquer</button><button class="btn ghost sm danger" type="button" data-act="del-audit" data-id="${a.id}">Supprimer</button></td></tr>`;
+  });
+  if (!list.length) h += `<tr><td colspan="10" class="muted">Aucun audit ne correspond aux filtres.</td></tr>`;
+  h += `</tbody></table>`;
+  v.innerHTML = h;
+};
+
+/* ---------- Référentiel ---------- */
+VIEWS.referentiel = function renderReferentiel() {
+  const v = $('#view-referentiel'), f = ui.ref, q = norm(f.q);
+  const refs = refsSorted().filter(r => (!f.chap || chapOf(r.clause) === f.chap) && (!f.processus || refProcs(r).includes(f.processus)) && (!f.nuc || r.nucleaire)
+    && (!q || norm(`${r.clause} ${r.titre} ${r.exigence} ${r.documents} ${r.processus} ${r.questions.join(' ')}`).includes(q)));
+  const chaps = uniq(store.referentiel.map(r => chapOf(r.clause))).sort((x, y) => (Number(x) || 999) - (Number(y) || 999));
+  const imported = store.referentiel.filter(r => r.source && r.source !== 'Référentiel par défaut').length;
+  let h = `<h2>Référentiel</h2>
+    <p class="lead">Exigences auditables, documents internes associés, processus concernés et questions d'audit. Par défaut : la structure commune à l'ISO 9001 et à l'ISO 19443. Importer la synthèse ISO 19443 du site (Excel ou CSV) pour y rattacher les documents du SMQ et le texte des exigences.</p>
+    <div class="filters"><input type="search" data-f="ref.q" placeholder="Rechercher" value="${esc(f.q)}">
+      <select data-f="ref.chap">${opt('', 'Tous les chapitres', f.chap)}${chaps.map(c => opt(c, chapLabel(c), f.chap)).join('')}</select>
+      <select data-f="ref.processus">${opt('', 'Tous les processus', f.processus)}${store.settings.processus.map(p => opt(p, p, f.processus)).join('')}</select>
+      <label class="chk"><input type="checkbox" data-f="ref.nuc"${f.nuc ? ' checked' : ''}> Spécifiques ISO 19443</label>
+      <span class="spacer"></span>
+      <button class="btn primary sm" type="button" data-act="ref-import-file">Importer un fichier Excel ou CSV</button>
+      <button class="btn sm" type="button" data-act="ref-import-paste">Coller depuis Excel</button>
+      <button class="btn sm" type="button" data-act="ref-add">Ajouter</button>
+      <button class="btn sm" type="button" data-act="ref-xlsx">Exporter</button>
+      <button class="btn sm ghost danger" type="button" data-act="ref-reset">Réinitialiser</button></div>
+    <p class="small muted">${plural(store.referentiel.length, 'exigence')}${imported ? `, dont ${imported} issue${imported > 1 ? 's' : ''} d'un import` : ''}. Un clic sur une ligne permet de la modifier.</p>
+    <table class="tbl resp"><thead><tr><th>Exigence</th><th>Intitulé</th><th>Texte de l'exigence</th><th>Documents internes</th><th>Processus</th><th>Questions</th></tr></thead><tbody>
+    ${refs.map(r => `<tr class="click" data-act="ref-edit" data-id="${esc(r.id)}"><td class="nowrap"><b>${esc(r.clause)}</b> ${r.nucleaire ? '<span class="tag nuc">19443</span>' : ''}</td><td data-l="Intitulé">${esc(r.titre)}</td>
+      <td class="small" data-l="Texte de l'exigence"><div class="clip">${esc(r.exigence) || '<span class="muted">Non importé</span>'}</div></td><td class="small" data-l="Documents internes"><div class="clip">${esc(r.documents)}</div></td>
+      <td class="small" data-l="Processus"><div class="clip">${esc(refProcs(r).join(' ; '))}</div></td><td class="num" data-l="Questions d'audit">${r.questions.length}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">Aucune exigence.</td></tr>'}
+    </tbody></table>`;
+  v.innerHTML = h;
+};
+function editRef(id) {
+  const isNew = !id, r = isNew ? { id: uid(), clause: '', titre: '', exigence: '', documents: '', processus: '', nucleaire: false, questions: [], source: 'Ajout manuel' } : refById(id);
+  if (!r) return;
+  const body = `<div class="grid2">${fld("Numéro d'exigence", `<input type="text" id="re-clause" value="${esc(r.clause)}" placeholder="Ex. 8.4.3">`)}${fld('Intitulé', `<input type="text" id="re-titre" value="${esc(r.titre)}">`)}</div>
+    ${fld("Texte ou résumé de l'exigence", `<textarea id="re-exigence" rows="3">${esc(r.exigence)}</textarea>`)}
+    ${fld('Documents internes (séparés par des points-virgules)', `<input type="text" id="re-documents" value="${esc(r.documents)}">`)}
+    ${fld('Processus (séparés par des points-virgules)', `<input type="text" id="re-processus" value="${esc(r.processus)}">`)}
+    <p class="hint">Processus du site : ${esc(store.settings.processus.join(' ; '))}</p>
+    <label class="chk fld"><input type="checkbox" id="re-nuc"${r.nucleaire ? ' checked' : ''}> Exigence spécifique ISO 19443 (pèse dans le score de priorité)</label>
+    ${fld("Questions d'audit (une par ligne)", `<textarea id="re-questions" rows="6">${esc(r.questions.join('\n'))}</textarea>`)}
+    <p class="hint">Les modifications s'appliquent aux prochaines checklists ; les audits déjà préparés gardent leurs questions.</p>`;
+  const save = () => {
+    const clause = $('#re-clause').value.trim(); if (!clause) { toast("Le numéro d'exigence est obligatoire."); return; }
+    Object.assign(r, { clause, titre: $('#re-titre').value.trim(), exigence: $('#re-exigence').value.trim(), documents: $('#re-documents').value.trim(), processus: $('#re-processus').value.trim(), nucleaire: $('#re-nuc').checked, questions: $('#re-questions').value.split('\n').map(x => x.trim()).filter(Boolean) });
+    if (isNew) store.referentiel.push(r);
+    persist(); closeModal(); rerender(); toast(isNew ? 'Exigence ajoutée.' : 'Exigence modifiée.');
+  };
+  const btns = [{ label: 'Annuler', act: closeModal }, { label: 'Enregistrer', cls: 'primary', act: save }];
+  if (!isNew) btns.unshift({ label: 'Supprimer', cls: 'ghost danger', act: () => { closeModal(); confirmBox("Supprimer l'exigence", `Supprimer §${r.clause} du référentiel ? Les audits existants conservent leurs checklists.`, 'Supprimer', () => { store.referentiel = store.referentiel.filter(x => x !== r); persist(); rerender(); }); } });
+  openModal(isNew ? 'Nouvelle exigence' : `Exigence ${r.clause}`, body, btns);
+}
+
+/* ---------- Import du référentiel : choix de la feuille, de la ligne d'en-tête et des colonnes ---------- */
+/* Les expressions s'appliquent aux en-têtes normalisés (minuscules, sans accents ni ponctuation). */
+const IMPORT_FIELDS = [
+  ['clause', "Numéro d'exigence", true, /^(n|no|num|numero|chap|chapitre|clause|article|paragraphe|para|section|ref|reference|iso|iso 19443|iso 9001)$|^n (de )?(l )?exigence|^numero|chapitre|paragraphe|clause|article/],
+  ['titre', 'Intitulé', false, /intitul|titre|libelle|theme/],
+  ['exigence', "Texte de l'exigence", false, /exigence|requirement|texte|contenu|description|attendu|resume/],
+  ['documents', 'Documents internes', false, /document|procedure|reference|preuve|mode operatoire|instruction|formulaire|reponse|disposition|smq/],
+  ['processus', 'Processus', false, /process|pilote|service/],
+  ['nucleaire', 'Spécifique ISO 19443 (oui/non)', false, /19443|nucl|specifique/],
+  ['questions', "Questions d'audit", false, /question/]
+];
+function startImport(sheets, source) {
+  sheets = sheets.filter(s => s.rows.some(r => r && r.some(c => String(c ?? '').trim())));
+  if (!sheets.length) { toast('Aucune donnée trouvée dans ce fichier.'); return; }
+  ui.imp = { sheets, source, sheet: 0, header: 1, map: {}, mode: 'merge', fill: true, keepQ: true };
+  guessHeader(); renderImport();
+}
+function guessHeader() {
+  const imp = ui.imp, rows = imp.sheets[imp.sheet].rows;
+  let best = 0, bestScore = -1;
+  for (let i = 0; i < Math.min(15, rows.length); i++) {
+    const r = rows[i] || [], s = r.filter(c => c && isNaN(Number(c)) && String(c).length < 60).length + IMPORT_FIELDS.reduce((n, f) => n + (r.some(c => f[3].test(norm(c))) ? 2 : 0), 0);
+    if (s > bestScore) { best = i; bestScore = s; }
+  }
+  imp.header = best + 1; guessMap();
+}
+function guessMap() {
+  const imp = ui.imp, head = (imp.sheets[imp.sheet].rows[imp.header - 1] || []).map(c => norm(c)), used = new Set();
+  imp.map = {};
+  IMPORT_FIELDS.forEach(([k, , , re]) => { const i = head.findIndex((h, j) => h && !used.has(j) && re.test(h)); if (i >= 0) { imp.map[k] = i; used.add(i); } });
+  if (imp.map.clause === undefined) {
+    const rows = imp.sheets[imp.sheet].rows.slice(imp.header, imp.header + 30), nCol = Math.max(0, ...rows.map(r => (r || []).length));
+    for (let j = 0; j < nCol; j++) if (!used.has(j) && rows.filter(r => /^\s*\d{1,2}(\.\d+)+/.test(String((r || [])[j] ?? ''))).length >= rows.length / 3) { imp.map.clause = j; break; }
+  }
+}
+const colName = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+function renderImport() {
+  const imp = ui.imp, rows = imp.sheets[imp.sheet].rows, nCol = Math.max(1, ...rows.slice(0, 60).map(r => (r || []).length));
+  const head = rows[imp.header - 1] || [];
+  const colOpts = cur => [opt('', 'Ne pas importer', cur ?? '')].concat(Array.from({ length: nCol }, (_, j) => opt(j, `${colName(j)}${head[j] ? '  ' + truncate(head[j], 40) : ''}`, cur ?? ''))).join('');
+  const prev = rows.slice(Math.max(0, imp.header - 2), imp.header + 6);
+  const body = `${imp.sheets.length > 1 ? fld('Feuille', `<select id="imp-sheet">${imp.sheets.map((s, i) => opt(i, `${s.name} (${s.rows.length} lignes)`, imp.sheet)).join('')}</select>`) : ''}
+    <div class="grid2">${fld("Ligne d'en-tête", `<input type="number" id="imp-header" min="1" max="${rows.length}" value="${imp.header}">`)}<div class="small muted" style="padding-top:22px">Source : ${esc(imp.source)}</div></div>
+    <div class="preview"><table><thead><tr><th></th>${Array.from({ length: nCol }, (_, j) => `<th>${colName(j)}</th>`).join('')}</tr></thead><tbody>
+    ${prev.map((r, i) => { const n = Math.max(0, imp.header - 2) + i + 1; return `<tr class="${n === imp.header ? 'hdr' : ''}"><th>${n}</th>${Array.from({ length: nCol }, (_, j) => `<td title="${esc((r || [])[j])}">${esc(truncate((r || [])[j], 40))}</td>`).join('')}</tr>`; }).join('')}</tbody></table></div>
+    <h4>Correspondance des colonnes</h4>
+    <div class="map-grid">${IMPORT_FIELDS.map(([k, l, req]) => `<label for="imp-map-${k}">${esc(l)}${req ? ' (obligatoire)' : ''}</label><select id="imp-map-${k}" data-imp-map="${k}">${colOpts(imp.map[k])}</select>`).join('')}</div>
+    <label class="chk fld"><input type="checkbox" id="imp-fill"${imp.fill ? ' checked' : ''}> Recopier vers le bas les numéros d'exigence manquants (cellules fusionnées dans Excel)</label>
+    <label class="chk fld"><input type="radio" name="imp-mode" value="merge"${imp.mode === 'merge' ? ' checked' : ''}> Compléter le référentiel actuel : les exigences de même numéro sont mises à jour, les autres sont ajoutées</label>
+    <label class="chk fld"><input type="radio" name="imp-mode" value="replace"${imp.mode === 'replace' ? ' checked' : ''}> Remplacer le référentiel par le contenu du fichier</label>
+    <label class="chk fld"><input type="checkbox" id="imp-keepq"${imp.keepQ ? ' checked' : ''}> Reprendre les questions d'audit par défaut pour les exigences reconnues</label>`;
+  openModal('Importer le référentiel', body, [{ label: 'Annuler', act: closeModal }, { label: 'Importer', cls: 'primary', act: doImport }], true);
+  ui.imp = imp;
+}
+function readImportForm() {
+  const imp = ui.imp; if (!imp) return;
+  imp.fill = $('#imp-fill').checked; imp.keepQ = $('#imp-keepq').checked;
+  imp.mode = ($('input[name="imp-mode"]:checked') || {}).value || 'merge';
+  $$('[data-imp-map]').forEach(s => { if (s.value === '') delete imp.map[s.dataset.impMap]; else imp.map[s.dataset.impMap] = Number(s.value); });
+}
+function doImport() {
+  readImportForm();
+  const imp = ui.imp, m = imp.map;
+  if (m.clause === undefined) { toast("Choisis la colonne du numéro d'exigence."); return; }
+  const rows = imp.sheets[imp.sheet].rows.slice(imp.header);
+  const get = (r, k) => m[k] === undefined ? '' : String((r || [])[m[k]] ?? '').trim();
+  const isYes = s => !!s && !/^(non|no|n|0|false|faux|-|na|n\/a)$/i.test(s.trim());
+  const defQ = {}; REF_DEFAUT.forEach(([c]) => defQ[c] = QUESTIONS_DEFAUT[c] || []);
+  const recs = []; let lastClause = '';
+  rows.forEach(r => {
+    let clause = get(r, 'clause');
+    if (!clause && imp.fill) clause = lastClause; else if (clause) lastClause = clause;
+    const titre = get(r, 'titre'), exi = get(r, 'exigence'), docs = get(r, 'documents');
+    if (!clause || !clauseNum(clause)) return;
+    if (!titre && !exi && !docs && !get(r, 'processus')) return;
+    recs.push({ clause: clauseNum(clause) === clause.replace(/^§\s*/, '') ? clauseNum(clause) : clause.replace(/^§\s*/, ''), titre, exigence: exi, documents: docs, processus: get(r, 'processus'), nucleaire: isYes(get(r, 'nucleaire')), questions: get(r, 'questions').split(/\n+/).map(x => x.trim()).filter(Boolean) });
+  });
+  if (!recs.length) { toast("Aucune ligne exploitable : vérifie la ligne d'en-tête et la colonne du numéro d'exigence."); return; }
+  const src = 'Import ' + imp.source + ' du ' + fmtDate(isoLocal());
+  const joinU = (a, b, sep) => uniq([...splitList(a), ...splitList(b)].map(x => x.trim())).join(sep);
+  const joinT = (a, b) => [a, b].filter(Boolean).filter((x, i, arr) => arr.indexOf(x) === i).join('\n');
+  let added = 0, updated = 0;
+  if (imp.mode === 'replace') {
+    const merged = new Map();
+    recs.forEach(x => {
+      const key = x.clause;
+      if (!merged.has(key)) merged.set(key, Object.assign({ id: 'r' + key.replace(/[^0-9a-z]+/gi, '-'), source: src }, x));
+      else { const y = merged.get(key); y.titre = y.titre || x.titre; y.exigence = joinT(y.exigence, x.exigence); y.documents = joinU(y.documents, x.documents, ' ; '); y.processus = joinU(y.processus, x.processus, ' ; '); y.nucleaire = y.nucleaire || x.nucleaire; y.questions = uniq([...y.questions, ...x.questions]); }
+    });
+    store.referentiel = [...merged.values()].map(r => {
+      const def = REF_DEFAUT.find(([c]) => c === clauseNum(r.clause));
+      if (!r.titre && def) r.titre = def[1];
+      if (!r.questions.length && imp.keepQ) r.questions = (defQ[clauseNum(r.clause)] || []).slice();
+      return r;
+    });
+    added = store.referentiel.length;
+  } else {
+    const seen = new Set();
+    recs.forEach(x => {
+      let r = store.referentiel.find(y => y.clause === x.clause) || store.referentiel.find(y => clauseNum(y.clause) === clauseNum(x.clause) && clauseNum(x.clause) === x.clause);
+      if (!r) {
+        r = { id: uid(), clause: x.clause, titre: x.titre, exigence: x.exigence, documents: x.documents, processus: x.processus, nucleaire: x.nucleaire, questions: x.questions.length ? x.questions : (imp.keepQ ? (defQ[clauseNum(x.clause)] || []).slice() : []), source: src };
+        store.referentiel.push(r); seen.add(r.id); added++; return;
+      }
+      if (!seen.has(r.id)) { seen.add(r.id); updated++; if (x.exigence) r.exigence = ''; if (x.documents) r.documents = ''; if (x.processus) r.processus = ''; }
+      r.titre = x.titre || r.titre; r.exigence = joinT(r.exigence, x.exigence); r.documents = joinU(r.documents, x.documents, ' ; ');
+      r.processus = joinU(r.processus, x.processus, ' ; '); r.nucleaire = r.nucleaire || x.nucleaire;
+      if (x.questions.length) r.questions = uniq([...(imp.keepQ ? r.questions : []), ...x.questions]);
+      r.source = src;
+    });
+  }
+  const newProcs = uniq(store.referentiel.flatMap(refProcs)).filter(p => !store.settings.processus.includes(p));
+  persist(true); closeModal(); showView('referentiel');
+  toast(`${recs.length} ligne${recs.length > 1 ? 's' : ''} lue${recs.length > 1 ? 's' : ''} : ${added} exigence${added > 1 ? 's' : ''} ajoutée${added > 1 ? 's' : ''}${updated ? `, ${updated} mise${updated > 1 ? 's' : ''} à jour` : ''}.`, 6000);
+  if (newProcs.length) toast(`Processus trouvés dans le fichier et absents des paramètres : ${newProcs.slice(0, 6).join(', ')}${newProcs.length > 6 ? '…' : ''}. Les ajouter dans Paramètres pour filtrer dessus.`, 9000);
+}
+function pasteImport() {
+  openModal('Coller depuis Excel', `<p class="hint">Dans Excel, sélectionne le tableau de la synthèse avec sa ligne d'en-tête, copie-le (Ctrl+C), puis colle-le ici (Ctrl+V).</p><textarea id="paste-area" rows="12" placeholder="Coller ici"></textarea>`,
+    [{ label: 'Annuler', act: closeModal }, { label: 'Continuer', cls: 'primary', act: () => { const t = $('#paste-area').value; if (!t.trim()) { toast('Rien à importer.'); return; } startImport([{ name: 'Collage', rows: parseDelimited(t, '\t') }], 'collage Excel'); } }]);
+}
+
+/* ---------- Paramètres ---------- */
+VIEWS.parametres = function renderParametres() {
+  const s = store.settings, v = $('#view-parametres');
+  const f = (k, l, type = 'text', extra = '') => fld(l, `<input type="${type}" data-s="${k}" value="${esc(s[k])}" ${extra}>`);
+  v.innerHTML = `<h2>Paramètres</h2><p class="lead">Réglages communs à tous les audits de cette base. Ils sont enregistrés avec la base et voyagent avec l'export JSON.</p>
+  <div style="max-width:980px">
+    <div class="box"><h3>Organisation</h3>
+      <div class="grid2">${f('organisation', 'Organisme')}${f('site', 'Site')}</div>
+      <div class="grid2">${f('auditeur', 'Auditeur par défaut')}${f('prefixe', 'Préfixe des numéros d’audit')}</div>
+      ${f('referentiels', 'Référentiels par défaut des nouveaux audits')}</div>
+    <div class="box"><h3>Préparation</h3>
+      <div class="grid2">${f('minutesParExigence', 'Durée d’audit estimée par exigence (minutes)', 'number', 'min="1" max="240"')}${f('heureDebut', 'Heure de début proposée dans le plan d’audit', 'time')}</div></div>
+    <div class="box"><h3>Libellés des évaluations</h3><p class="hint">Les codes restent fixes (ils servent aux couleurs, au tri et aux exports) ; seuls les libellés changent.</p>
+      <div class="grid3">${EVALS.map(e => fld(e.code, `<input type="text" data-lib="${e.code}" value="${esc(s.libelles[e.code])}">`)).join('')}</div></div>
+    <div class="box"><h3>Processus du site</h3><p class="hint">Un processus par ligne. Ils servent au dossier d'audit, au plan d'audit et au rattachement des exigences.</p>
+      <textarea data-s-procs rows="8">${esc(s.processus.join('\n'))}</textarea></div>
+    <div class="box"><h3>Rapport</h3>${fld('Mention de fin de rapport', `<textarea data-s="mentionFin" rows="3">${esc(s.mentionFin)}</textarea>`)}</div>
+    <div class="box"><h3>Affichage</h3>${fld('Thème', `<select data-s="theme">${[['auto', 'Automatique (selon le système)'], ['light', 'Clair'], ['dark', 'Sombre']].map(([v, l]) => opt(v, l, s.theme)).join('')}</select>`)}</div>
+    <div class="box"><h3>Données</h3>
+      <p class="hint">Les données restent dans ce navigateur, sur ce poste. Pour sauvegarder ou partager, exporter la base en JSON et la déposer sur OneDrive ou SharePoint ; un collègue l'importe ensuite avec Importer (JSON).</p>
+      <div class="row"><button class="btn" type="button" data-base="export-json">Exporter la base (JSON)</button><button class="btn" type="button" data-base="import-json">Importer (JSON)</button><button class="btn" type="button" data-base="examples">Charger les exemples</button><span class="spacer"></span><button class="btn danger" type="button" data-act="wipe">Effacer toute la base</button></div></div>
+  </div>`;
+};
+
+/* =====================================================================
+   7. EXPORTS
+   Registre unique : chaque format reçoit l'audit courant.
+   Pour ajouter un format : Exporters.monformat = { label, hint, run(a) }.
+   ===================================================================== */
+const Exporters = {
+  docx: { label: 'Rapport Word (.docx)', hint: 'Rapport modifiable : page de garde, visas, synthèse, constats', run: a => exportDOCX(a) },
+  pdf: { label: 'Rapport PDF', hint: "Ouvre l'impression : choisir Save as PDF", run: a => exportPDF(a) },
+  plan: { label: "Plan d'audit Word (.docx)", hint: "Déroulé, interlocuteurs et documents, à envoyer à l'audité", run: a => exportPlanDOCX(a), sepBefore: true },
+  checklist: { label: 'Checklist terrain à imprimer', hint: "Questions, cases d'évaluation et zones de notes", run: a => exportChecklist(a) },
+  json: { label: "Transférer l'audit (JSON)", hint: "Fichier à importer sur un autre appareil ou chez un collègue", run: a => exportJSON(a), sepBefore: true }
+};
+/* Un export du rapport Word ou du JSON réussi date l'audit : sert à prévenir avant une suppression. */
+function runExport(k, a) {
+  if (!a) return;
+  let res;
+  try { res = Exporters[k].run(a); } catch (e) { console.error(e); toast('Export impossible : ' + e.message); return; }
+  Promise.resolve(res).then(ok => { if (ok && ['docx', 'json'].includes(k)) { a.lastExport = new Date().toISOString(); persist(); } });
+}
+
+/* Trois façons de remettre un fichier, selon l'endroit où l'outil est ouvert :
+   page publiée sur claude.ai (téléchargement confirmé par le lecteur), téléphone ou tablette
+   (feuille de partage : Teams, Outlook, OneDrive, Fichiers), ordinateur (téléchargement classique). */
+const Host = {
+  coarse: matchMedia('(pointer: coarse)').matches,
+  artifact: () => !!(window.claude && typeof window.claude.use === 'function'),
+  dl: undefined
+};
+async function hostDownloads() {
+  if (Host.dl !== undefined) return Host.dl;
+  try { Host.dl = await window.claude.use('downloads'); } catch (e) { Host.dl = null; }
+  return Host.dl;
+}
+async function download(blob, name) {
+  if (Host.artifact()) {
+    const dl = await hostDownloads();
+    if (!dl) { toast("Enregistrement de fichiers indisponible dans cet affichage. Ouvrir l'outil depuis le fichier HTML."); return false; }
+    try { await dl.save({ filename: name, data: blob }); return true; }
+    catch (e) { if (e && e.code === 'declined') return false; toast('Enregistrement impossible : ' + ((e && e.message) || e)); return false; }
+  }
+  if (Host.coarse && navigator.canShare && typeof File === 'function') {
+    try {
+      const f = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+      if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return true; }
+    } catch (e) { if (e && e.name === 'AbortError') return false; }
+  }
+  const u = URL.createObjectURL(blob), l = document.createElement('a');
+  l.href = u; l.download = name; document.body.appendChild(l); l.click();
+  setTimeout(() => { URL.revokeObjectURL(u); l.remove(); }, 1500);
+  return true;
+}
+const safeName = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 80);
+const fileBase = a => 'Audit_' + (safeName(a.numero) || 'sans_numero');
+const EVAL_HEX = { C: '6B7F8F', PF: '2E6B3A', PP: '3F6A8F', OBS: '9A6A12', NCm: 'B45A2A', NCM: 'A23434', NA: '8A939E' };
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const X = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function datesText(a) { return a.dateDebut ? (a.dateFin && a.dateFin !== a.dateDebut ? `Du ${fmtDate(a.dateDebut)} au ${fmtDate(a.dateFin)}` : `Le ${fmtDate(a.dateDebut)}`) : ''; }
+const synthParas = t => String(t || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+const PW = 9864; /* largeur utile A4 portrait en vingtièmes de point */
+function infoRows(a, plan) {
+  const r = [['Référence Fabasoft', a.numero], ["Type d'audit", a.type], ['Processus audités', a.processus.join(', ')], ['Périmètre', a.perimetre], ['Référentiels', a.referentiels],
+    ['Dates', datesText(a)], ['Lieu', a.lieu], ['Auditeur responsable', a.pilote], ['Co-auditeurs', a.auditeurs]];
+  if (!plan) r.push(['Indice du rapport', a.indice], ["Date d'émission", fmtDate(a.dateEmission)]);
+  r.push(['Diffusion', a.diffusion]);
+  return r.filter(([, v]) => String(v || '').trim());
+}
+/* Blocs : h1, h2, p (t, i), pl (étiquette en gras + texte), table (cols [en-tête, largeur], rows, split). */
+function reportBlocks(a) {
+  const s = store.settings, o = a.options, st = stats(a), B = [];
+  let n = 0; const h1 = (t, pb) => B.push({ k: 'h1', t: `${++n}. ${t}`, pb });
+  h1('Objectifs, périmètre et référentiels', true);
+  B.push({ k: 'p', t: a.objectifs || 'Objectifs non renseignés.' });
+  if (a.perimetre) B.push({ k: 'pl', l: 'Périmètre : ', t: a.perimetre });
+  if (a.referentiels) B.push({ k: 'pl', l: 'Référentiels : ', t: a.referentiels });
+  const docs = auditDocuments(a);
+  if (o.documents && docs.length) { B.push({ k: 'h2', t: 'Documents internes de référence' }); B.push({ k: 'table', cols: [['Document', 3000], ['Exigences concernées', PW - 3000]], rows: docs.map(d => [{ t: d.doc, b: true }, uniq(d.clauses).map(c => '§' + c).join(', ')]) }); }
+  h1("Déroulement de l'audit");
+  if (datesText(a)) B.push({ k: 'pl', l: 'Dates : ', t: datesText(a) + (a.lieu ? `, ${a.lieu}` : '') });
+  const pers = a.audites.filter(p => p.nom || p.fonction);
+  B.push({ k: 'h2', t: 'Personnes rencontrées' });
+  B.push(pers.length ? { k: 'table', cols: [['Nom', 3000], ['Fonction', PW - 5000], ['Ouverture', 1000], ['Clôture', 1000]], rows: pers.map(p => [p.nom, p.fonction, p.ouverture ? 'Présent' : '', p.cloture ? 'Présent' : '']) } : { k: 'p', t: 'Aucune personne renseignée.' });
+  h1('Synthèse');
+  if (a.appreciation) B.push({ k: 'pl', l: 'Appréciation globale : ', t: a.appreciation });
+  const sp = synthParas(a.synthese); if (sp.length) sp.forEach(t => B.push({ k: 'p', t })); else B.push({ k: 'p', t: 'Synthèse non rédigée.', i: true });
+  B.push({ k: 'h2', t: 'Bilan' });
+  B.push({ k: 'table', cols: [['Indicateur', 4400], ['Nombre', 1400]], rows: CONSTAT_TYPES.map(t => [`${evalLabel(t)} (${t})`, String(st.byType[t] || 0)]).concat([['Exigences évaluées', `${st.done} sur ${st.total}`]]) });
+  const list = sortedConstats(a), pf = list.filter(k => k.type === 'PF'), ec = list.filter(k => k.type !== 'PF');
+  const exi = k => [k.clause && !String(k.exigence).includes(clauseNum(k.clause)) ? '§' + k.clause : '', k.exigence].filter(Boolean).join('\n');
+  if (pf.length) { h1('Points forts'); B.push({ k: 'table', cols: [['Réf.', 1500], ['Exigence', 1700], ['Point fort', PW - 3200]], rows: pf.map(k => [{ t: constatNum(a, k), b: true }, k.clause ? '§' + k.clause : '', k.ecart + (k.preuve ? '\nPreuves : ' + k.preuve : '')]), split: true }); }
+  h1('Constats');
+  B.push(ec.length ? { k: 'table', cols: [['Réf.', 1500], ['Type', 800], ['Exigence', 2600], ['Constat et preuves', PW - 4900]], rows: ec.map(k => [{ t: constatNum(a, k), b: true }, { t: k.type, b: true, color: EVAL_HEX[k.type] }, exi(k), k.ecart + (k.preuve ? '\nPreuves : ' + k.preuve : '')]), split: true } : { k: 'p', t: 'Aucun écart relevé.' });
+  if (s.mentionFin) B.push({ k: 'p', t: s.mentionFin, i: true });
+  if (o.checklist && a.items.length) {
+    h1('Détail de la checklist');
+    B.push({ k: 'table', cols: [['Exigence', 900], ['Intitulé et documents', 3300], ['Évaluation', 1100], ['Preuves et constatations', PW - 5300]], split: true,
+      rows: sortedItems(a).map(it => [{ t: it.clause, b: true }, it.titre + (it.documents ? '\nDocuments : ' + it.documents : '') + (o.questions && it.questions.length ? '\n' + it.questions.map((q, i) => `${i + 1}. ${q.q}`).join('\n') : ''), { t: it.eval ? `${it.eval}` : 'Non évalué', b: true, color: EVAL_HEX[it.eval] || '5F6B7A' }, it.preuves]) });
+  }
+  return B;
+}
+function planBlocks(a) {
+  const B = [], multi = a.dateFin && a.dateDebut && a.dateFin !== a.dateDebut;
+  let n = 0; const h1 = t => B.push({ k: 'h1', t: `${++n}. ${t}` });
+  h1('Objectifs'); B.push({ k: 'p', t: a.objectifs || 'Objectifs non renseignés.' });
+  h1('Déroulement prévu');
+  if (a.plan.length) {
+    const cols = (multi ? [['Jour', 1100]] : []).concat([['Horaire', 1200], ['Séquence', multi ? 2900 : 3500], ['Exigences', 1500], ['Interlocuteurs', multi ? 1900 : 2200], ['Lieu', multi ? 1264 : 1464]]);
+    B.push({ k: 'table', cols, rows: a.plan.map(r => (multi ? [fmtDate(r.jour)] : []).concat([[r.debut, r.fin].filter(Boolean).join(' à '), { t: r.sujet, b: /ouverture|clôture/i.test(r.sujet) }, r.exigences, r.interlocuteurs, r.lieu])) });
+  } else B.push({ k: 'p', t: 'Déroulé à préciser.', i: true });
+  const pers = a.audites.filter(p => p.nom || p.fonction);
+  if (pers.length) { h1('Personnes à rencontrer'); B.push({ k: 'table', cols: [['Nom', 3600], ['Fonction', PW - 3600]], rows: pers.map(p => [p.nom, p.fonction]) }); }
+  const docs = auditDocuments(a);
+  if (docs.length) { h1('Documents à tenir à disposition'); B.push({ k: 'table', cols: [['Document', 3000], ['Exigences concernées', PW - 3000]], rows: docs.map(d => [{ t: d.doc, b: true }, uniq(d.clauses).map(c => '§' + c).join(', ')]) }); }
+  if (a.entrees.trim()) { h1("Points d'attention"); synthParas(a.entrees).forEach(t => B.push({ k: 'p', t })); }
+  B.push({ k: 'p', t: "Merci de confirmer la disponibilité des interlocuteurs avant l'audit et de signaler toute contrainte d'accès aux ateliers." });
+  return B;
+}
+
+/* ---------- ZIP (méthode « stockée », suffisante pour les formats Office) ---------- */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC_TABLE[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files, mime) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true);
+    lh.setUint32(22, data.length, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, time, true); ch.setUint16(14, date, true); ch.setUint32(16, crc, true); ch.setUint32(20, data.length, true); ch.setUint32(24, data.length, true);
+    ch.setUint16(28, name.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true);
+    ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: mime });
+}
+function coreProps(title) {
+  const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z'), s = store.settings;
+  return XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${X(title)}</dc:title><dc:creator>${X(s.auditeur || s.organisation)}</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified></cp:coreProperties>`;
+}
+
+/* ---------- Word (.docx) ---------- */
+const WNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+function wRun(text, o = {}) {
+  const rPr = `${o.b ? '<w:b/>' : ''}${o.i ? '<w:i/>' : ''}${o.color ? `<w:color w:val="${o.color}"/>` : ''}${o.sz ? `<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>` : ''}`;
+  return `<w:r>${rPr ? `<w:rPr>${rPr}</w:rPr>` : ''}${String(text ?? '').split('\n').map((p, i) => `${i ? '<w:br/>' : ''}<w:t xml:space="preserve">${X(p)}</w:t>`).join('')}</w:r>`;
+}
+function wPara(content, o = {}) {
+  const runs = Array.isArray(content) ? content.join('') : wRun(content, o);
+  const sp = o.before != null || o.after != null ? `<w:spacing${o.before != null ? ` w:before="${o.before}"` : ''}${o.after != null ? ` w:after="${o.after}"` : ''}/>` : '';
+  const pPr = `${o.style ? `<w:pStyle w:val="${o.style}"/>` : ''}${o.keep ? '<w:keepNext/>' : ''}${o.pb ? '<w:pageBreakBefore/>' : ''}${sp}${o.align ? `<w:jc w:val="${o.align}"/>` : ''}`;
+  return `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${runs}</w:p>`;
+}
+function wTable(cols, rows, o = {}) {
+  const total = cols.reduce((s, c) => s + c[1], 0);
+  const borders = `<w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(b => `<w:${b} w:val="single" w:sz="4" w:space="0" w:color="A0A7B0"/>`).join('')}</w:tblBorders>`;
+  const cell = (v, w, fill, bold) => {
+    const c = v && typeof v === 'object' ? v : { t: v };
+    return `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${c.fill || fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${c.fill || fill}"/>` : ''}</w:tcPr>${wPara([wRun(c.t ?? '', { b: bold || c.b, color: c.color, sz: o.sz || 18 })], { after: 0 })}</w:tc>`;
+  };
+  let x = `<w:tbl><w:tblPr><w:tblW w:w="${total}" w:type="dxa"/><w:tblLayout w:type="fixed"/>${borders}<w:tblCellMar><w:top w:w="45" w:type="dxa"/><w:left w:w="85" w:type="dxa"/><w:bottom w:w="45" w:type="dxa"/><w:right w:w="85" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${cols.map(c => `<w:gridCol w:w="${c[1]}"/>`).join('')}</w:tblGrid>`;
+  if (!o.noHead) x += `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${cols.map(c => cell(c[0], c[1], 'D9DEE4', true)).join('')}</w:tr>`;
+  rows.forEach(r => { x += `<w:tr><w:trPr>${o.split ? '' : '<w:cantSplit/>'}${o.rowH ? `<w:trHeight w:val="${o.rowH}"/>` : ''}</w:trPr>${r.map((v, i) => cell(v, cols[i][1], o.firstColFill && i === 0 ? 'EEF0F3' : '', o.firstColFill && i === 0)).join('')}</w:tr>`; });
+  return x + '</w:tbl>' + wPara('', { after: 60 });
+}
+function blocksToDocx(B) {
+  return B.map(b => {
+    if (b.k === 'h1') return wPara(b.t, { style: 'Heading1', pb: b.pb });
+    if (b.k === 'h2') return wPara(b.t, { style: 'Heading2' });
+    if (b.k === 'p') return synthParas(b.t).length > 1 ? synthParas(b.t).map(t => wPara(t, b.i ? { i: true, color: '5F6B7A' } : {})).join('') : wPara(b.t, b.i ? { i: true, color: '5F6B7A' } : {});
+    if (b.k === 'pl') return wPara([wRun(b.l, { b: true }), wRun(b.t)]);
+    if (b.k === 'table') return wTable(b.cols, b.rows, { split: b.split });
+    return '';
+  }).join('');
+}
+function coverDocx(a, titre, plan) {
+  const s = store.settings;
+  let b = wPara(`${s.organisation}${s.site ? ', ' + s.site : ''}`, { color: '5F6B7A', sz: 20, after: plan ? 400 : 1600 });
+  b += wPara(titre, { style: 'Title' });
+  b += wPara(a.numero, { sz: 30, color: '2F3E4D', b: true, after: 60 }) + wPara(a.titre, { sz: 28, after: plan ? 300 : 500 });
+  b += wTable([['Champ', 2800], ['Valeur', PW - 2800]], infoRows(a, plan), { noHead: true, firstColFill: true });
+  if (!plan) {
+    b += wPara('Visas', { style: 'Heading2' });
+    b += wTable([['', 2200], ['Nom', 3300], ['Date', 1700], ['Visa', PW - 7200]], [['Rédigé par', a.pilote, '', ''], ['Vérifié par', a.verificateur, '', ''], ['Approuvé par', a.approbateur, '', '']], { rowH: 520, firstColFill: true });
+  }
+  return b;
+}
+function exportDOCX(a) {
+  const body = coverDocx(a, "Rapport d'audit interne", false) + blocksToDocx(reportBlocks(a));
+  return download(docxPackage(body, `Rapport d'audit interne ${a.numero}${a.indice ? ', indice ' + a.indice : ''}`, `Rapport d'audit interne ${a.numero}`), fileBase(a) + '_rapport' + (a.indice ? '_ind' + safeName(a.indice) : '') + '.docx');
+}
+function exportPlanDOCX(a) {
+  if (!a.plan.length) toast("Le plan ne contient aucune séquence : le document reprend le dossier et les documents à préparer.", 6000);
+  const body = coverDocx(a, "Plan d'audit interne", true) + blocksToDocx(planBlocks(a));
+  return download(docxPackage(body, `Plan d'audit interne ${a.numero}`, `Plan d'audit interne ${a.numero}`), fileBase(a) + '_plan.docx');
+}
+function docxPackage(body, footerText, title) {
+  const ftRun = t => `<w:r><w:rPr><w:color w:val="5F6B7A"/><w:sz w:val="16"/></w:rPr>${t}</w:r>`;
+  const footer = XML + `<w:ftr ${WNS}><w:p><w:pPr><w:pStyle w:val="Footer"/><w:tabs><w:tab w:val="right" w:pos="${PW}"/></w:tabs></w:pPr>${wRun(footerText, { color: '5F6B7A', sz: 16 })}${ftRun('<w:tab/><w:t xml:space="preserve">Page </w:t>')}<w:fldSimple w:instr=" PAGE ">${ftRun('<w:t>1</w:t>')}</w:fldSimple>${ftRun('<w:t xml:space="preserve"> sur </w:t>')}<w:fldSimple w:instr=" NUMPAGES ">${ftRun('<w:t>1</w:t>')}</w:fldSimple></w:p></w:ftr>`;
+  const doc = XML + `<w:document ${WNS}><w:body>${body}<w:sectPr><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1021" w:bottom="1134" w:left="1021" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const hs = (id, name, sz, before, after, lvl, border) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="${before}" w:after="${after}"/>${border ? '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="2" w:color="C3C9D1"/></w:pBdr>' : ''}${lvl != null ? `<w:outlineLvl w:val="${lvl}"/>` : ''}</w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
+  const styles = XML + `<w:styles ${WNS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="200"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr></w:style>
+${hs('Heading1', 'heading 1', 28, 320, 120, 0, true)}${hs('Heading2', 'heading 2', 23, 220, 100, 1, false)}
+<w:style w:type="paragraph" w:styleId="Footer"><w:name w:val="footer"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0"/></w:pPr></w:style>
+<w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`;
+  const settings = XML + `<w:settings ${WNS}><w:defaultTabStop w:val="708"/><w:characterSpacingControl w:val="doNotCompress"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`;
+  const files = [
+    { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>` },
+    { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>` },
+    { name: 'word/_rels/document.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdSettings" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/><Relationship Id="rIdFtr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>` },
+    { name: 'word/document.xml', data: doc }, { name: 'word/styles.xml', data: styles }, { name: 'word/settings.xml', data: settings }, { name: 'word/footer1.xml', data: footer },
+    { name: 'docProps/core.xml', data: coreProps(title) }
+  ];
+  return makeZip(files, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+}
+
+/* ---------- Excel (.xlsx) ---------- */
+const XLSX_FILL = { C: 'E3E8EC', PF: 'D7EBDC', PP: 'DCE6F0', OBS: 'F3E6CC', NCm: 'F5DDD0', NCM: 'F2D4D4' };
+const XLSX_EVAL_XF = { C: 5, PF: 6, PP: 7, OBS: 8, NCm: 9, NCM: 10 };
+const xd = iso => ({ date: iso });
+const xe = code => ({ v: code, ev: code });
+function colLetter(i) { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function buildXLSX(sheets) {
+  const names = new Set();
+  sheets.forEach(sh => { let n = String(sh.name || 'Feuille').replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31), base = n, i = 2; while (names.has(n)) n = base.slice(0, 28) + ' ' + i++; names.add(n); sh.safe = n; });
+  const serial = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000) : null; };
+  const sheetXml = sh => {
+    const nc = sh.cols.length, last = colLetter(nc - 1) + (sh.rows.length + 1);
+    let x = XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`;
+    x += `<sheetViews><sheetView workbookViewId="0"${sh.noFreeze ? '' : ''}>${sh.noFreeze ? '' : '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'}</sheetView></sheetViews>`;
+    x += `<sheetFormatPr defaultRowHeight="15"/><cols>${sh.cols.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c.w || 14}" customWidth="1"/>`).join('')}</cols><sheetData>`;
+    const all = [sh.cols.map(c => ({ v: c.h, s: 1 }))].concat(sh.rows);
+    all.forEach((r, ri) => {
+      x += `<row r="${ri + 1}">`;
+      r.forEach((v, ci) => {
+        const ref = colLetter(ci) + (ri + 1);
+        if (v === null || v === undefined || v === '') return;
+        if (typeof v === 'number') { x += `<c r="${ref}" s="4"><v>${v}</v></c>`; return; }
+        if (typeof v === 'object' && 'date' in v) { const n = serial(v.date); if (n != null) x += `<c r="${ref}" s="3"><v>${n}</v></c>`; return; }
+        let s = 2, t = v;
+        if (typeof v === 'object') { t = v.v; s = v.s ?? (v.ev && XLSX_EVAL_XF[v.ev]) ?? 2; if (typeof t === 'number') { x += `<c r="${ref}" s="${s}"><v>${t}</v></c>`; return; } }
+        t = String(t ?? ''); if (!t) return; if (t.length > 32000) t = t.slice(0, 32000);
+        x += `<c r="${ref}" t="inlineStr" s="${s}"><is><t xml:space="preserve">${X(t)}</t></is></c>`;
+      });
+      x += `</row>`;
+    });
+    x += `</sheetData>${sh.rows.length && !sh.noFilter ? `<autoFilter ref="A1:${last}"/>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToHeight="0"/></worksheet>`;
+    return x;
+  };
+  const fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>', '<fill><patternFill patternType="solid"><fgColor rgb="FFD9DEE4"/><bgColor indexed="64"/></patternFill></fill>']
+    .concat(Object.keys(XLSX_EVAL_XF).map(k => `<fill><patternFill patternType="solid"><fgColor rgb="FF${XLSX_FILL[k]}"/><bgColor indexed="64"/></patternFill></fill>`));
+  const bd = '<border><left style="thin"><color rgb="FFC3C9D1"/></left><right style="thin"><color rgb="FFC3C9D1"/></right><top style="thin"><color rgb="FFC3C9D1"/></top><bottom style="thin"><color rgb="FFC3C9D1"/></bottom><diagonal/></border>';
+  const xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>',
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>',
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>',
+    '<xf numFmtId="14" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="top"/></xf>',
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>']
+    .concat(Object.keys(XLSX_EVAL_XF).map((k, i) => `<xf numFmtId="0" fontId="1" fillId="${3 + i}" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="top"/></xf>`));
+  const styles = XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font></fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${bd}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const defNames = sheets.map((sh, i) => sh.rows.length && !sh.noFilter ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${sh.safe.replace(/'/g, "''")}'!$A$1:$${colLetter(sh.cols.length - 1)}$${sh.rows.length + 1}</definedName>` : '').join('');
+  const wb = XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView xWindow="0" yWindow="0" windowWidth="28800" windowHeight="15000"/></bookViews><sheets>${sheets.map((sh, i) => `<sheet name="${X(sh.safe)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>${defNames ? `<definedNames>${defNames}</definedNames>` : ''}</workbook>`;
+  const files = [
+    { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>` },
+    { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>` },
+    { name: 'xl/workbook.xml', data: wb },
+    { name: 'xl/_rels/workbook.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: 'xl/styles.xml', data: styles },
+    ...sheets.map((sh, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(sh) })),
+    { name: 'docProps/core.xml', data: coreProps(sheets[0].name) }
+  ];
+  return makeZip(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+function refSheet() {
+  return { name: 'Référentiel', cols: [{ h: 'Exigence', w: 10 }, { h: 'Intitulé', w: 40 }, { h: "Texte de l'exigence", w: 60 }, { h: 'Documents internes', w: 40 }, { h: 'Processus', w: 36 }, { h: 'Spécifique 19443', w: 12 }, { h: "Questions d'audit", w: 80 }, { h: 'Source', w: 26 }],
+    rows: refsSorted().map(r => [r.clause, r.titre, r.exigence, r.documents, r.processus, r.nucleaire ? 'Oui' : 'Non', r.questions.join('\n'), r.source]) };
+}
+function exportRefXLSX() { return download(buildXLSX([refSheet()]), `Referentiel_audit_${isoLocal()}.xlsx`); }
+
+/* ---------- PDF par impression du navigateur ---------- */
+const PRINT_CSS = `@page{size:A4 portrait;margin:14mm 13mm}
+  body{font:9.5pt/1.4 Arial,sans-serif;color:#1f2933;margin:0}
+  h1{font-size:22pt;margin:0 0 4mm;color:#2f3e4d} h2{font-size:13pt;color:#2f3e4d;margin:7mm 0 3mm;border-bottom:1px solid #c3c9d1;padding-bottom:1.5mm;page-break-after:avoid}
+  h3{font-size:11pt;color:#2f3e4d;margin:5mm 0 2mm;page-break-after:avoid}
+  .org{color:#5f6b7a;font-size:10pt;text-transform:uppercase;letter-spacing:.06em;margin-bottom:22mm}
+  .sub{font-size:14pt;margin-bottom:10mm} table{border-collapse:collapse;width:100%;font-size:8.8pt;page-break-inside:auto} tr{page-break-inside:avoid}
+  th{background:#d9dee4;text-align:left;padding:3px 5px;border:1px solid #a0a7b0} td{padding:3px 5px;border:1px solid #a0a7b0;vertical-align:top;white-space:pre-wrap}
+  table.kv th{width:30%;background:#eef0f3} .visa td{height:13mm} .pb{page-break-before:always} p{margin:0 0 2.5mm;white-space:pre-wrap}
+  .t{font-weight:700} .muted{color:#5f6b7a} thead{display:table-header-group}`;
+function printHTML(title, css, body) {
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
+  if (Host.artifact()) {
+    download(new Blob([html], { type: 'text/html' }), safeName(title) + '.html').then(ok => { if (ok) toast("Impression impossible dans cet affichage : ouvrir le fichier enregistré dans le navigateur, puis l'imprimer en PDF.", 8000); });
+    return;
+  }
+  if (Host.coarse) {
+    const u = URL.createObjectURL(new Blob([html.replace('</body>', '<script>window.addEventListener("load",function(){setTimeout(function(){window.print()},500)})<\/script></body>')], { type: 'text/html' }));
+    const w = window.open(u, '_blank');
+    if (w) { toast("Dans la page qui s'ouvre, choisir Imprimer puis Enregistrer en PDF."); return; }
+  }
+  const fr = $('#print-frame');
+  fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Impression impossible : ' + e.message); } }, 150); fr.onload = null; };
+  fr.srcdoc = html;
+  toast("Dans la fenêtre d'impression, choisir « Enregistrer au format PDF » ou « Microsoft Print to PDF », orientation Portrait.");
+}
+const ptbl = (head, rows, cls = '', widths) => `<table class="${cls}"${widths ? ' style="table-layout:fixed"' : ''}>${widths ? `<colgroup>${widths.map(w => `<col style="width:${w}">`).join('')}</colgroup>` : ''}${head ? `<thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>` : ''}<tbody>${rows.map(r => `<tr>${r.map(c => c && typeof c === 'object' ? `<td class="${c.cls || ''}" style="${c.style || ''}">${esc(c.t)}</td>` : `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+const ptype = t => ({ t: t || 'Non évalué', cls: 't', style: `color:#${EVAL_HEX[t] || '5F6B7A'}` });
+function blocksToHTML(B) {
+  return B.map(b => {
+    if (b.k === 'h1') return `<h2${b.pb ? ' class="pb"' : ''}>${esc(b.t)}</h2>`;
+    if (b.k === 'h2') return `<h3>${esc(b.t)}</h3>`;
+    if (b.k === 'p') return synthParas(b.t).map(t => `<p${b.i ? ' class="muted"' : ''}>${b.i ? '<i>' : ''}${esc(t)}${b.i ? '</i>' : ''}</p>`).join('') || `<p>${esc(b.t)}</p>`;
+    if (b.k === 'pl') return `<p><b>${esc(b.l)}</b>${esc(b.t)}</p>`;
+    if (b.k === 'table') {
+      const tot = b.cols.reduce((x, c) => x + c[1], 0);
+      return ptbl(b.cols.map(c => c[0]), b.rows.map(r => r.map(c => c && typeof c === 'object' ? { t: c.t, cls: c.b ? 't' : '', style: c.color ? `color:#${c.color}` : '' } : c)), '', b.cols.map(c => (100 * c[1] / tot).toFixed(1) + '%'));
+    }
+    return '';
+  }).join('');
+}
+function coverHTML(a, titre, plan) {
+  const s = store.settings;
+  return `<div class="org"${plan ? ' style="margin-bottom:8mm"' : ''}>${esc(s.organisation)}${s.site ? ', ' + esc(s.site) : ''}</div><h1>${esc(titre)}</h1><div class="sub"><b>${esc(a.numero)}</b><br>${esc(a.titre)}</div>
+    <table class="kv"><tbody>${infoRows(a, plan).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table>
+    ${plan ? '' : `<h2>Visas</h2>${ptbl(['', 'Nom', 'Date', 'Visa'], [['Rédigé par', a.pilote, '', ''], ['Vérifié par', a.verificateur, '', ''], ['Approuvé par', a.approbateur, '', '']], 'visa', ['22%', '34%', '17%', '27%'])}`}`;
+}
+function reportBody(a) { return coverHTML(a, "Rapport d'audit interne", false) + blocksToHTML(reportBlocks(a)); }
+function exportPDF(a) { printHTML(fileBase(a) + '_rapport', PRINT_CSS, reportBody(a)); }
+function exportChecklist(a) {
+  const s = store.settings;
+  const css = PRINT_CSS + `.it{border:1px solid #a0a7b0;border-radius:2mm;padding:2.5mm 3mm;margin:0 0 3mm;page-break-inside:avoid}
+    .hd{display:flex;gap:3mm;align-items:baseline;font-weight:700;font-size:10.5pt} .hd .c{min-width:14mm}
+    .docs{font-size:8.5pt;color:#5f6b7a;margin:1mm 0 0 17mm} ol{margin:1.5mm 0 1.5mm 17mm;padding-left:4mm} li{margin:.6mm 0}
+    .ev{display:flex;flex-wrap:wrap;gap:4mm;margin:1.5mm 0 1.5mm 17mm;font-size:8.5pt} .ev span{display:inline-flex;align-items:center;gap:1.2mm}
+    .bx{display:inline-block;width:3.2mm;height:3.2mm;border:1px solid #1f2933} .ln{border-bottom:1px solid #c3c9d1;height:6.5mm;margin-left:17mm}
+    .head{border-bottom:1px solid #2f3e4d;padding-bottom:2mm;margin-bottom:4mm} .head b{font-size:13pt}`;
+  let body = `<div class="head"><b>Checklist d'audit ${esc(a.numero)}</b> ${esc(a.titre)}<br><span class="muted">${esc(s.organisation)}${s.site ? ', ' + esc(s.site) : ''}. ${esc(datesText(a))}${a.pilote ? '. Auditeur : ' + esc(a.pilote) : ''}${a.processus.length ? '. Processus : ' + esc(a.processus.join(', ')) : ''}</span></div>`;
+  let lastCh = null;
+  sortedItems(a).forEach(it => {
+    const ch = chapOf(it.clause);
+    if (ch !== lastCh) { body += `<h3>${esc(chapLabel(ch))}</h3>`; lastCh = ch; }
+    body += `<div class="it"><div class="hd"><span class="c">${esc(it.clause)}</span><span>${esc(it.titre)}</span></div>
+      ${it.documents ? `<div class="docs">Documents internes : ${esc(it.documents)}</div>` : ''}
+      ${it.questions.length ? `<ol>${it.questions.map(q => `<li>${esc(q.q)}</li>`).join('')}</ol>` : ''}
+      <div class="ev">${EVALS.map(e => `<span><i class="bx"></i>${e.code} ${esc(evalLabel(e.code))}</span>`).join('')}</div>
+      <div class="ln"></div><div class="ln"></div><div class="ln"></div></div>`;
+  });
+  if (!a.items.length) body += '<p>Checklist vide : préparer l’audit avant impression.</p>';
+  printHTML(fileBase(a) + '_checklist', css, body);
+}
+
+/* ---------- Copie dans le presse-papiers ---------- */
+async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(`${what} copié${/s$/.test(what) ? 's' : ''} : coller dans Fabasoft.`); return; } catch (e) { /* repli ci-dessous */ }
+  const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  if (ok) toast(`${what} copié${/s$/.test(what) ? 's' : ''} : coller dans Fabasoft.`);
+  else openModal('Copier le texte', `<p class="hint">La copie automatique est bloquée ici : sélectionner le texte puis le copier.</p><textarea rows="12" readonly>${esc(text)}</textarea>`, [{ label: 'Fermer', act: closeModal }]);
+}
+
+/* ---------- JSON ---------- */
+function exportJSON(a) {
+  return download(new Blob([JSON.stringify({ app: 'audit-iso19443', type: 'audit', version: APP_VERSION, exportedAt: new Date().toISOString(), audit: a }, null, 2)], { type: 'application/json' }), fileBase(a) + '.json');
+}
+function exportBaseJSON() {
+  const when = new Date().toISOString();
+  return download(new Blob([JSON.stringify(Object.assign({ type: 'base', exportedAt: when }, store), null, 2)], { type: 'application/json' }), `Base_audits_internes_${isoLocal()}.json`)
+    .then(ok => { if (ok) { store.audits.forEach(a => a.lastExport = when); persist(true); if (ui.view === 'programme') rerender(); } return ok; });
+}
+/* Plusieurs audits dans un seul fichier, pour les transmettre d'un appareil à l'autre. */
+function exportAuditsJSON(list) {
+  const when = new Date().toISOString();
+  const name = list.length === 1 ? fileBase(list[0]) + '.json' : `Audits_${list.length}_${isoLocal()}.json`;
+  return download(new Blob([JSON.stringify({ app: 'audit-iso19443', type: 'audits', version: APP_VERSION, exportedAt: when, audits: list }, null, 2)], { type: 'application/json' }), name)
+    .then(ok => { if (ok) { list.forEach(a => a.lastExport = when); persist(true); rerender(); } return ok; });
+}
+function importJSONText(text) {
+  let d; try { d = JSON.parse(text); } catch (e) { toast('Fichier JSON illisible.'); return; }
+  if (d && d.type === 'audit' && d.audit) {
+    const a = normAudit(d.audit), ex = store.audits.find(x => x.id === a.id);
+    const add = copy => { if (copy) { a.id = uid(); a.numero += ' (copie)'; } store.audits.push(a); persist(true); openAudit(a.id, 'dossier'); toast('Audit importé.'); };
+    if (!ex) return add(false);
+    openModal('Audit déjà présent', `<p>La base contient déjà l'audit ${esc(auditLabel(ex))}, modifié le ${fmtDateTime(ex.updatedAt)}. Le fichier date du ${fmtDateTime(a.updatedAt)}.</p>`,
+      [{ label: 'Annuler', act: closeModal }, { label: 'Ajouter comme copie', act: () => { closeModal(); add(true); } }, { label: 'Remplacer', cls: 'primary', act: () => { closeModal(); store.audits = store.audits.filter(x => x.id !== ex.id); add(false); } }]);
+    return;
+  }
+  if (d && d.type === 'audits' && Array.isArray(d.audits)) {
+    let n = 0, m = 0, k = 0;
+    d.audits.map(normAudit).forEach(a => {
+      const i = store.audits.findIndex(x => x.id === a.id);
+      if (i < 0) { store.audits.push(a); n++; }
+      else if ((a.updatedAt || '') > (store.audits[i].updatedAt || '')) { store.audits[i] = a; m++; }
+      else k++;
+    });
+    persist(true); updateFoot(); updateHeader(); showView('programme');
+    toast(`${n} audit${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}, ${m} mis à jour${k ? `, ${k} déjà à jour sur cet appareil` : ''}.`, 6000);
+    return;
+  }
+  if (d && (d.app === 'audit-iso19443' || Array.isArray(d.audits))) {
+    const inc = migrate(JSON.parse(JSON.stringify(d)));
+    openModal('Importer une base', `<p>Le fichier contient ${plural(inc.audits.length, 'audit')} et ${plural(inc.referentiel.length, 'exigence')} au référentiel.</p>
+      <p><b>Fusionner</b> : ajoute les audits absents et remplace ceux du fichier plus récents ; le référentiel et les paramètres actuels sont conservés.</p><p><b>Remplacer</b> : la base actuelle est remplacée par le fichier.</p>`,
+      [{ label: 'Annuler', act: closeModal },
+       { label: 'Fusionner', act: () => { let n = 0, m = 0; inc.audits.forEach(a => { const i = store.audits.findIndex(x => x.id === a.id); if (i < 0) { store.audits.push(a); n++; } else if ((a.updatedAt || '') > (store.audits[i].updatedAt || '')) { store.audits[i] = a; m++; } }); persist(true); closeModal(); applyTheme(); updateHeader(); rerender(); updateFoot(); toast(`${n} audit${n > 1 ? 's' : ''} ajouté${n > 1 ? 's' : ''}, ${m} mis à jour.`); } },
+       { label: 'Remplacer', cls: 'primary', act: () => { store = inc; ui.currentId = null; persist(true); closeModal(); applyTheme(); updateHeader(); showView('programme'); updateFoot(); toast('Base remplacée.'); } }]);
+    return;
+  }
+  toast("Ce fichier n'est pas une base ni un audit de cet outil.");
+}
+
+/* ---------- Lecture de fichiers pour l'import du référentiel ---------- */
+async function readZip(buf) {
+  const u = new Uint8Array(buf), dv = new DataView(buf), dec = new TextDecoder();
+  let eocd = -1;
+  for (let i = u.length - 22; i >= Math.max(0, u.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("ce fichier n'est pas un classeur Excel (.xlsx)");
+  const n = dv.getUint16(eocd + 10, true), entries = new Map(); let p = dv.getUint32(eocd + 16, true);
+  for (let i = 0; i < n; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), lho = dv.getUint32(p + 42, true);
+    entries.set(dec.decode(u.subarray(p + 46, p + 46 + nlen)), { method, csize, lho });
+    p += 46 + nlen + xlen + clen;
+  }
+  return {
+    has: name => entries.has(name),
+    async text(name) {
+      const e = entries.get(name); if (!e) return null;
+      const start = e.lho + 30 + dv.getUint16(e.lho + 26, true) + dv.getUint16(e.lho + 28, true), raw = u.subarray(start, start + e.csize);
+      if (e.method === 0) return dec.decode(raw);
+      if (e.method !== 8) throw new Error('compression non prise en charge');
+      if (typeof DecompressionStream === 'undefined') throw new Error('navigateur trop ancien pour lire un fichier Excel ; utiliser « Coller depuis Excel »');
+      const out = await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer();
+      return dec.decode(out);
+    }
+  };
+}
+async function readXLSX(buf) {
+  const z = await readZip(buf), P = new DOMParser();
+  const xml = async name => { const t = await z.text(name); return t ? P.parseFromString(t, 'application/xml') : null; };
+  const all = (doc, tag) => doc ? Array.from(doc.getElementsByTagNameNS('*', tag)) : [];
+  const wb = await xml('xl/workbook.xml'); if (!wb) throw new Error('classeur Excel introuvable dans le fichier');
+  const rels = await xml('xl/_rels/workbook.xml.rels'), relMap = {};
+  all(rels, 'Relationship').forEach(r => relMap[r.getAttribute('Id')] = r.getAttribute('Target'));
+  const ss = all(await xml('xl/sharedStrings.xml'), 'si').map(si => all(si, 't').filter(t => !t.closest || !t.parentNode || t.parentNode.localName !== 'rPh').map(t => t.textContent).join(''));
+  const colIdx = ref => { const m = String(ref).match(/^[A-Z]+/); let n = 0; for (const ch of m ? m[0] : 'A') n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  const sheets = [];
+  for (const s of all(wb, 'sheet')) {
+    const rid = s.getAttribute('r:id') || s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    let target = relMap[rid] || ''; if (!target) continue;
+    target = target.startsWith('/') ? target.slice(1) : (target.startsWith('xl/') ? target : 'xl/' + target);
+    const doc = await xml(target); if (!doc) continue;
+    const rows = [];
+    all(doc, 'row').forEach((r, idx) => {
+      const ri = r.getAttribute('r') ? Number(r.getAttribute('r')) - 1 : idx, arr = [];
+      all(r, 'c').forEach((c, k) => {
+        const col = c.getAttribute('r') ? colIdx(c.getAttribute('r')) : k, t = c.getAttribute('t');
+        let v = '';
+        if (t === 'inlineStr') v = all(c, 't').map(x => x.textContent).join('');
+        else { const ve = all(c, 'v')[0]; v = ve ? ve.textContent : ''; if (t === 's') v = ss[Number(v)] ?? ''; else if (t === 'b') v = v === '1' ? 'Oui' : 'Non'; }
+        arr[col] = v;
+      });
+      rows[ri] = arr;
+    });
+    sheets.push({ name: s.getAttribute('name') || 'Feuille', rows: Array.from(rows, r => Array.from(r || [], x => x ?? '')) });
+  }
+  return sheets;
+}
+function parseDelimited(text, delim) {
+  text = String(text || '').replace(/^﻿/, '');
+  if (!delim) { const first = text.split(/\r?\n/)[0] || ''; const cnt = d => first.split(d).length; delim = ['\t', ';', ','].sort((x, y) => cnt(y) - cnt(x))[0]; }
+  const rows = []; let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; } else field += c; }
+    else if (c === '"' && field === '') q = true;
+    else if (c === delim) { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(field); rows.push(row); row = []; field = ''; }
+    else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+async function readRefFile(file) {
+  const name = file.name || 'fichier';
+  try {
+    if (/\.(xlsx|xlsm)$/i.test(name)) { startImport(await readXLSX(await file.arrayBuffer()), name); return; }
+    if (/\.xls$/i.test(name)) { toast('Ancien format .xls : enregistrer le fichier en .xlsx dans Excel, ou utiliser « Coller depuis Excel ».', 7000); return; }
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);
+    startImport([{ name: name, rows: parseDelimited(text) }], name);
+  } catch (e) { console.error(e); toast('Lecture impossible : ' + e.message, 7000); }
+}
+
+/* =====================================================================
+   8. EXEMPLES, ÉVÉNEMENTS ET DÉMARRAGE
+   ===================================================================== */
+function loadExamples() {
+  const mk = (base, refsEval, constats) => {
+    const a = normAudit(Object.assign(newAudit(), base));
+    refsEval.forEach(([clause, ev, preuves, ok]) => {
+      const r = store.referentiel.find(x => x.clause === clause) || refsForClause(clause)[0];
+      const it = r ? itemFromRef(r) : { id: uid(), refId: null, clause, titre: clause, documents: '', exigence: '', nucleaire: false, questions: [], eval: '', preuves: '' };
+      it.eval = ev || ''; it.preuves = preuves || ''; it.questions.forEach((q, i) => q.ok = !!ev && ev !== 'NA' && (ok === undefined || i < ok));
+      a.items.push(it);
+    });
+    constats.forEach((c, i) => {
+      const it = a.items.find(x => x.clause === c.clause);
+      a.constats.push(Object.assign({ id: uid(), n: i + 1, refId: it ? it.refId : null, itemId: it ? it.id : null, processus: a.processus[0] || '', exigence: it ? exigenceTextFor(a, it) : '', refFabasoft: '' }, c));
+    });
+    if (base.withPlan) { a.plan = proposePlan(a); delete a.withPlan; }
+    return normAudit(a);
+  };
+  const exigenceTextFor = (a, it) => [`${splitList(a.referentiels)[0] || 'ISO 19443'} §${it.clause} ${it.titre}`, it.documents ? 'Documents internes : ' + it.documents : ''].filter(Boolean).join('\n');
+  const ex = [
+    mk({ id: 'ex-2025-01', numero: 'EX-2025-01', titre: 'Achats et surveillance des fournisseurs', type: 'Audit interne processus', processus: ['Achats et fournisseurs'], perimetre: 'Commandes de pièces de fonderie et de visserie pour les pompes destinées au nucléaire', dateDebut: '2025-05-20', dateFin: '2025-05-21', pilote: 'Auditeur exemple', auditeurs: 'Co-auditeur exemple', statut: 'Rapport émis', indice: 'A', dateEmission: '2025-06-02', appreciation: 'Exigences satisfaites avec écarts mineurs',
+      audites: [{ nom: 'Responsable achats', fonction: 'Pilote du processus Achats', ouverture: true, cloture: true }, { nom: 'Acheteur projets', fonction: 'Acheteur', ouverture: true, cloture: false }, { nom: 'Ingénieur qualité fournisseurs', fonction: 'Qualité fournisseurs', ouverture: false, cloture: true }],
+      synthese: "Le processus est maîtrisé dans son ensemble. L'évaluation des fournisseurs est structurée et à jour.\n\nLa transmission des exigences nucléaires dans les commandes reste incomplète sur une partie de l'échantillon." },
+      [['8.4.1', 'PF', 'Liste des fournisseurs approuvés à jour, revue trimestrielle tracée. 15 fournisseurs évalués en 2024 sur 15 prévus.'],
+       ['8.4.2', 'OBS', '6 réceptions examinées : plan de surveillance défini pour la fonderie, absent pour la visserie de classe 2.'],
+       ['8.4.3', 'NCm', '10 commandes examinées : 2 commandes sans clause de répercussion des exigences de sûreté.'],
+       ['7.5.3', 'OBS', 'Au bureau des achats, les conditions générales d’achat imprimées sont à l’indice C alors que l’indice D est en vigueur.']],
+      [{ type: 'PF', clause: '8.4.1', ecart: 'Évaluation des fournisseurs structurée : 15 fournisseurs évalués sur 15 prévus en 2024, revue trimestrielle tracée en réunion achats-qualité.', preuve: 'Comptes rendus de revue de janvier, avril et juillet 2025' },
+       { type: 'OBS', clause: '8.4.2', ecart: "Le plan de surveillance n'est pas défini pour la visserie de classe 2 (1 famille d'achat sur 4 examinées).", preuve: 'Plans de surveillance des familles fonderie, usinage, garnitures ; aucun pour la visserie', refFabasoft: 'EX-F-2025-031' },
+       { type: 'NCm', clause: '8.4.3', ecart: '2 commandes sur 10 examinées ne comportent pas la clause de répercussion des exigences de sûreté aux sous-traitants de rang 2.', preuve: 'Commandes 4500123456 et 4500123511 (fonderie)', refFabasoft: 'EX-F-2025-030' },
+       { type: 'OBS', clause: '7.5.3', ecart: 'Document périmé au poste : conditions générales d’achat affichées à l’indice C au bureau des achats, indice D en vigueur depuis mars 2025.', preuve: 'Constat visuel au bureau des achats, liste des documents en vigueur', refFabasoft: 'EX-F-2025-032' }]),
+    mk({ id: 'ex-2026-01', numero: 'EX-2026-01', titre: 'Contrôle réception', type: 'Audit interne processus', processus: ['Contrôle réception'], perimetre: 'Réception des pièces brutes et usinées, magasin et zone de quarantaine', dateDebut: '2026-03-10', dateFin: '2026-03-10', pilote: 'Auditeur exemple', statut: 'Rapport en rédaction', appreciation: 'Exigences satisfaites avec écarts mineurs',
+      audites: [{ nom: 'Responsable réception', fonction: 'Pilote du processus Contrôle réception', ouverture: true, cloture: true }, { nom: 'Contrôleur réception', fonction: 'Contrôleur', ouverture: true, cloture: true }, { nom: 'Magasinier', fonction: 'Magasin', ouverture: false, cloture: false }] },
+      [['8.4.2', 'C', '8 dossiers de réception examinés, tous complets et signés.'],
+       ['8.5.2', 'PF', 'Étiquetage des pièces avec numéro de coulée et état de contrôle, vérifié sur 12 pièces en magasin.'],
+       ['8.6', 'C', 'Libération par le contrôleur habilité vérifiée sur 8 dossiers.'],
+       ['8.7', 'C', 'Zone de quarantaine identifiée, 3 pièces bloquées avec FNC associée.'],
+       ['7.1.5', 'OBS', '2 pieds à coulisse sur 9 sans étiquette de validité d’étalonnage au poste de contrôle.'],
+       ['7.5.3', 'NCm', "L'instruction de réception citée au poste renvoie à une procédure annulée."]],
+      [{ type: 'NCm', clause: '7.5.3', ecart: "L'instruction de réception affichée au poste (indice B) cite en référence une procédure annulée depuis 2025 ; 1 document sur 6 vérifiés au poste.", preuve: 'Instruction de réception au poste, liste des documents en vigueur extraite de SAP DMS le 10/03/2026' },
+       { type: 'OBS', clause: '7.1.5', ecart: "2 pieds à coulisse sur 9 au poste de contrôle réception ne portent pas d'étiquette de validité d'étalonnage.", preuve: 'Moyens n° PC-114 et PC-121, base métrologie consultée : étalonnages valides' },
+       { type: 'PF', clause: '8.5.2', ecart: "Identification des pièces exemplaire : numéro de coulée et état de contrôle visibles sur les 12 pièces vérifiées en magasin.", preuve: 'Pièces vérifiées en magasin, allées B et C' }]),
+    mk({ id: 'ex-2026-02', numero: 'EX-2026-02', titre: 'Maîtrise documentaire', type: 'Audit interne processus', processus: ['Maîtrise documentaire'], perimetre: 'Création, revue, diffusion et retrait des documents du SMQ dans SAP DMS', dateDebut: '2026-12-08', dateFin: '2026-12-08', pilote: 'Auditeur exemple', statut: 'En préparation', withPlan: true,
+      entrees: "Audit précédent (EX-2026-01) : NCm sur une instruction de réception citant une procédure annulée.\n\nMigration des références documentaires vers SAP DMS en cours.",
+      audites: [{ nom: 'Responsable documentation', fonction: 'Pilote du processus Maîtrise documentaire' }, { nom: 'Assistante qualité', fonction: 'Gestion des diffusions' }] },
+      [['7.5.1'], ['7.5.2'], ['7.5.3']], [])
+  ];
+  let n = 0;
+  ex.forEach(a => { a.lastExport = a.updatedAt; if (!store.audits.some(x => x.id === a.id)) { store.audits.push(a); n++; } });
+  persist(true); updateFoot();
+  showView('programme');
+  toast(n ? `${plural(n, 'audit')} d'exemple chargé${n > 1 ? 's' : ''}.` : 'Les exemples sont déjà présents.');
+}
+
+/* ---------- Suppression d'audits, avec rappel d'export et annulation possible ---------- */
+let lastDeleted = null;
+function deleteAudits(ids) {
+  const list = store.audits.filter(a => ids.includes(a.id)); if (!list.length) return;
+  const nk = list.reduce((s, a) => s + a.constats.length, 0);
+  const notExp = list.filter(a => !a.lastExport || a.lastExport < a.updatedAt);
+  const one = list.length === 1;
+  let body = one ? `<p style="margin-top:0">Supprimer définitivement <b>${esc(auditLabel(list[0]))}</b>, sa checklist et ${plural(nk, 'constat')} de cet appareil ?</p>`
+    : `<p style="margin-top:0">Supprimer définitivement ces ${list.length} audits et leurs ${plural(nk, 'constat')} de cet appareil ?</p><ul>${list.map(a => `<li>${esc(auditLabel(a))}</li>`).join('')}</ul>`;
+  if (notExp.length) body += `<div class="warnbox">${one ? "Cet audit n'a pas été exporté" : `${plural(notExp.length, 'audit')} n'${notExp.length > 1 ? 'ont' : 'a'} pas été exporté${notExp.length > 1 ? 's' : ''}`} depuis sa dernière modification. Exporter en JSON avant de supprimer si les données doivent être conservées.</div>`;
+  const btns = [{ label: 'Annuler', act: closeModal }];
+  if (notExp.length) btns.push({ label: 'Exporter en JSON', act: () => { exportAuditsJSON(list).then(ok => { if (ok) { closeModal(); deleteAudits(ids); } }); } });
+  btns.push({ label: one ? "Supprimer l'audit" : `Supprimer les ${list.length} audits`, cls: 'primary danger-bg', act: () => {
+    closeModal();
+    lastDeleted = JSON.parse(JSON.stringify(list));
+    store.audits = store.audits.filter(a => !ids.includes(a.id));
+    ids.forEach(id => ui.progSel.delete(id));
+    if (ids.includes(ui.currentId)) { ui.currentId = null; store.settings.lastId = null; }
+    persist(true); updateHeader(); updateFoot();
+    if (ui.view === 'audit') showView('programme'); else rerender();
+    toast(one ? 'Audit supprimé.' : `${list.length} audits supprimés.`, 12000, { label: 'Annuler', fn: () => {
+      if (!lastDeleted) return;
+      lastDeleted.map(normAudit).forEach(a => { if (!store.audits.some(x => x.id === a.id)) store.audits.push(a); });
+      lastDeleted = null; persist(true); updateFoot(); rerender(); toast('Suppression annulée.');
+    } });
+  } });
+  openModal(one ? "Supprimer l'audit" : 'Supprimer des audits', body, btns);
+}
+
+/* ---------- Actions déclenchées par data-act ---------- */
+const ACTIONS = {
+  'menu': el => { const m = document.getElementById(el.dataset.menu); const open = m.classList.contains('open'); $$('.menu.open').forEach(x => x.classList.remove('open')); if (!open) m.classList.add('open'); },
+  'modal-close': () => closeModal(),
+  'new-audit': () => { const a = newAudit(); store.audits.push(a); persist(true); openAudit(a.id, 'dossier'); updateFoot(); setTimeout(() => { const t = $('[data-a="titre"]'); if (t) t.focus(); }, 50); },
+  'dup-audit': el => {
+    const src = store.audits.find(a => a.id === el.dataset.id); if (!src) return;
+    const a = normAudit(JSON.parse(JSON.stringify(src)));
+    const y = String(new Date().getFullYear() + 1).slice(2);
+    Object.assign(a, { id: uid(), numero: `${store.settings.prefixe || ''}${y}-`, statut: STATUTS_AUDIT[0], dateDebut: '', dateFin: '', synthese: '', appreciation: '', indice: 'A', dateEmission: '', lastExport: '', plan: [], constats: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    a.audites.forEach(p => { p.ouverture = false; p.cloture = false; });
+    a.items.forEach(it => { it.id = uid(); it.eval = ''; it.preuves = ''; it.questions.forEach(q => q.ok = false); });
+    store.audits.push(a); persist(true); openAudit(a.id, 'dossier'); updateFoot(); toast("Audit dupliqué : même périmètre et même checklist, sans évaluations ni constats. Compléter la référence Fabasoft et les dates.", 6000);
+  },
+  'del-audit': el => deleteAudits([el.dataset.id]),
+  'sel-del': () => deleteAudits([...ui.progSel]),
+  'sel-export': () => exportAuditsJSON(store.audits.filter(a => ui.progSel.has(a.id))),
+  'sel-clear': () => { ui.progSel.clear(); rerender(); },
+  'next-todo': () => {
+    const a = cur(), it = sortedItems(a).find(i => !i.eval);
+    if (!it) { toast('Toutes les exigences sont évaluées.'); return; }
+    if (ui.terr.filtre || ui.terr.q) { ui.terr.filtre = ''; ui.terr.q = ''; renderTab(); }
+    const el = $('#item-' + it.id); if (el) { el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.style.outline = '2px solid var(--accent)'; setTimeout(() => el.style.outline = '', 1600); }
+  },
+  'c-back': () => { ui.cDetail = false; renderTab(); $('#audit-body').scrollTop = 0; },
+  'aud-add': () => { const a = cur(); a.audites.push({ nom: '', fonction: '', ouverture: false, cloture: false }); touch(a); renderTab(); const ins = $$('[data-aud][data-k="nom"]'); if (ins.length) ins[ins.length - 1].focus(); },
+  'aud-del': el => { const a = cur(); a.audites.splice(Number(el.dataset.i), 1); touch(a); renderTab(); },
+  'prep-proc': () => { const a = cur(); const n = addRefsToAudit(a, refsSorted().filter(r => refProcs(r).some(p => a.processus.includes(p)))); touch(a); renderTab(); refreshTabCounts(); toast(n ? `${plural(n, 'exigence')} ajoutée${n > 1 ? 's' : ''}.` : 'Ces exigences sont déjà dans la checklist.'); },
+  'prep-clear': () => { const a = cur(); removeItems(a, a.items.map(i => i.id), () => { renderTab(); refreshTabCounts(); }); },
+  'prep-free': () => {
+    const a = cur(), c = $('#free-clause').value.trim(), t = $('#free-titre').value.trim();
+    if (!c && !t) { toast('Renseigner au moins un repère ou un intitulé.'); return; }
+    a.items.push({ id: uid(), refId: null, clause: c || 'Libre', titre: t, documents: '', exigence: '', nucleaire: false, questions: [], eval: '', preuves: '' });
+    touch(a); renderTab(); refreshTabCounts();
+  },
+  'item-del': el => { const a = cur(), id = el.dataset.id || el.closest('[data-item]').dataset.item; removeItems(a, [id], () => { renderTab(); refreshTabCounts(); }); },
+  'item-constat': el => { const a = cur(), it = a.items.find(i => i.id === el.closest('[data-item]').dataset.item); const k = newConstat(a, it); if (isEcart(k.type) && (SEV[k.type] > (SEV[it.eval] ?? -1))) it.eval = k.type; touch(a); ui.selConstat = k.id; ui.cDetail = true; showTab('constats'); setTimeout(() => { const e = $('[data-c="ecart"]'); if (e) e.focus(); }, 50); },
+  'c-new': () => { const a = cur(), k = newConstat(a); touch(a); ui.selConstat = k.id; ui.cDetail = true; renderTab(); refreshTabCounts(); },
+  'c-del': () => { const a = cur(), k = a.constats.find(x => x.id === ui.selConstat); if (!k) return; confirmBox('Supprimer le constat', `Supprimer le constat ${constatNum(a, k)} ?`, 'Supprimer', () => { a.constats = a.constats.filter(x => x !== k); ui.selConstat = null; touch(a); renderTab(); refreshTabCounts(); }); },
+  'c-fill-req': () => {
+    const a = cur(), k = a.constats.find(x => x.id === ui.selConstat); if (!k) return;
+    const it = k.itemId && a.items.find(i => i.id === k.itemId), r = k.refId && refById(k.refId);
+    if (!it && !r) { toast("Choisir d'abord l'exigence du référentiel."); return; }
+    k.exigence = exigenceText(it || { refId: r.id, clause: r.clause, titre: r.titre, documents: r.documents, exigence: r.exigence }); touch(a); renderTab();
+  },
+  'draft-synthese': () => { const a = cur(); const go = () => { a.synthese = draftSynthese(a); touch(a); renderTab(); }; if (a.synthese.trim()) confirmBox('Remplacer la synthèse', 'La synthèse actuelle sera remplacée par le texte proposé.', 'Remplacer', go, false); else go(); },
+  'plan-propose': () => {
+    const a = cur(); if (!a.items.length) { toast("Préparer d'abord la checklist dans l'onglet Préparation."); return; }
+    const go = () => { a.plan = proposePlan(a); touch(a); renderTab(); refreshTabCounts(); };
+    if (a.plan.length) confirmBox('Remplacer le plan', "Le plan actuel sera remplacé par une nouvelle proposition établie à partir de la checklist.", 'Remplacer', go, false); else go();
+  },
+  'plan-add': () => { const a = cur(), last = a.plan[a.plan.length - 1]; a.plan.push({ id: uid(), jour: last ? last.jour : '', debut: last ? last.fin : (store.settings.heureDebut || ''), fin: '', sujet: '', exigences: '', interlocuteurs: '', lieu: '' }); touch(a); renderTab(); refreshTabCounts(); const ins = $$('[data-plan][data-k="sujet"]'); if (ins.length) ins[ins.length - 1].focus(); },
+  'plan-del': el => { const a = cur(); a.plan.splice(Number(el.dataset.i), 1); touch(a); renderTab(); refreshTabCounts(); },
+  'plan-up': el => { const a = cur(), i = Number(el.dataset.i); if (i > 0) { [a.plan[i - 1], a.plan[i]] = [a.plan[i], a.plan[i - 1]]; touch(a); renderTab(); } },
+  'c-copy': () => { const a = cur(), k = a.constats.find(x => x.id === ui.selConstat); if (k) copyText(constatText(a, k), 'Constat'); },
+  'c-copy-all': () => { const a = cur(); copyText(sortedConstats(a).map(k => `${constatNum(a, k)}\n${constatText(a, k)}`).join('\n\n'), 'Constats'); },
+  'ref-edit': el => editRef(el.dataset.id),
+  'ref-add': () => editRef(null),
+  'ref-xlsx': () => exportRefXLSX(),
+  'ref-import-file': () => { const i = $('#file-ref'); i.value = ''; i.click(); },
+  'ref-import-paste': () => pasteImport(),
+  'ref-reset': () => confirmBox('Réinitialiser le référentiel', "Le référentiel revient à la structure par défaut (ISO 9001 et ISO 19443) avec les questions d'origine. Les imports et modifications sont perdus ; les audits gardent leurs checklists.", 'Réinitialiser', () => { store.referentiel = defaultReferentiel(); persist(true); rerender(); }),
+  'wipe': () => confirmBox('Effacer toute la base', 'Tous les audits, le référentiel et les paramètres de ce navigateur seront effacés. Exporter la base en JSON avant si besoin.', 'Tout effacer', () => { store = migrate(null); ui.currentId = null; persist(true); applyTheme(); updateHeader(); updateFoot(); showView('programme'); })
+};
+const BASE_ACTIONS = {
+  'export-json': () => exportBaseJSON(),
+  'import-json': () => { const i = $('#file-json'); i.value = ''; i.click(); },
+  'examples': () => loadExamples()
+};
+function gotoItem(id) {
+  ui.tab = 'terrain'; ui.terr.filtre = ''; ui.terr.q = ''; if (ui.view !== 'audit') showView('audit'); else VIEWS.audit();
+  const el = $('#item-' + id); if (el) { el.scrollIntoView({ block: 'center' }); el.style.outline = '2px solid var(--accent)'; setTimeout(() => el.style.outline = '', 1600); }
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.dropdown')) $$('.menu.open').forEach(m => m.classList.remove('open'));
+  const mb = e.target.closest('[data-mbtn]'); if (mb) { const b = modalButtons[Number(mb.dataset.mbtn)]; if (b && b.act) b.act(); return; }
+  if (e.target.id === 'modal') { closeModal(); return; }
+  const el = e.target.closest('[data-view],[data-tab],[data-act],[data-eval],[data-open],[data-open-constat],[data-sel-constat],[data-goto-constat],[data-goto-item],[data-goto-tab],[data-exp],[data-base]');
+  if (!el || el.disabled) return;
+  const d = el.dataset;
+  if (d.view) return showView(d.view);
+  if (d.tab) return showTab(d.tab);
+  if (d.exp) { $$('.menu.open').forEach(m => m.classList.remove('open')); return runExport(d.exp, cur()); }
+  if (d.base) { $$('.menu.open').forEach(m => m.classList.remove('open')); return BASE_ACTIONS[d.base] && BASE_ACTIONS[d.base](); }
+  if (d.act) return ACTIONS[d.act] && ACTIONS[d.act](el, e);
+  if (d.eval) {
+    const a = cur(), it = a.items.find(i => i.id === el.closest('[data-item]').dataset.item);
+    it.eval = it.eval === d.eval ? '' : d.eval; touch(a); refreshItem(a, it);
+    if (isEcart(it.eval) && !a.constats.some(k => k.itemId === it.id)) toast(`Évaluation ${it.eval} : penser à rédiger le constat.`);
+    return;
+  }
+  if (d.open) { if (e.target.closest('input, label, .selcell')) return; return openAudit(d.open, ui.view === 'couverture' || ui.view === 'programme' || ui.view === 'constats' ? 'dossier' : undefined); }
+  if (d.openConstat) { const [aid, kid] = d.openConstat.split('|'); openAudit(aid, 'constats'); ui.selConstat = kid; ui.cDetail = true; renderTab(); return; }
+  if (d.selConstat) { ui.selConstat = d.selConstat; ui.cDetail = true; renderTab(); $('#audit-body').scrollTop = 0; return; }
+  if (d.gotoConstat) { ui.selConstat = d.gotoConstat; ui.cDetail = true; showTab('constats'); return; }
+  if (d.gotoItem) return gotoItem(d.gotoItem);
+  if (d.gotoTab) return showTab(d.gotoTab);
+});
+
+const debouncedRefresh = debounce(() => { refreshTabCounts(); }, 300);
+const debouncedFilter = debounce(fn => rerenderKeep(fn), 220);
+document.addEventListener('input', e => {
+  const t = e.target, d = t.dataset;
+  if (t.type === 'checkbox' || t.type === 'radio') return;
+  const a = cur();
+  if (d.a && a) {
+    a[d.a] = t.value; touch(a);
+    if (d.a === 'numero' || d.a === 'titre') updateHeader();
+    if (d.a === 'statut') { $$('[data-a="statut"]').forEach(s => { if (s !== t) s.value = t.value; }); }
+    if (ui.tab === 'rapport') debouncedPreview();
+    debouncedRefresh(); return;
+  }
+  if (d.aud !== undefined && a) { a.audites[Number(d.aud)][d.k] = t.value; touch(a); return; }
+  if (d.plan !== undefined && a) { a.plan[Number(d.plan)][d.k] = t.value; touch(a); return; }
+  if (d.itemF && a) { const it = a.items.find(i => i.id === t.closest('[data-item]').dataset.item); it[d.itemF] = t.value; touch(a); debouncedRefresh(); return; }
+  if (d.c && a) {
+    const k = a.constats.find(x => x.id === ui.selConstat); if (!k) return;
+    if (d.c === 'refId') {
+      if (t.value === '__free') return;
+      const r = refById(t.value); k.refId = r ? r.id : null; k.clause = r ? r.clause : '';
+      if (r && !k.exigence.trim()) k.exigence = exigenceText({ refId: r.id, clause: r.clause, titre: r.titre, documents: r.documents, exigence: r.exigence });
+      const it = r && a.items.find(i => i.refId === r.id); if (it) k.itemId = it.id;
+      touch(a); renderTab(); return;
+    }
+    k[d.c] = t.value;
+    touch(a);
+    if (d.c === 'type') { renderTab(); return; }
+    const aid = $('#c-aid'); if (aid) aid.innerHTML = aidHTML(a, k);
+    const cl = $('#clist'); if (cl && (d.c === 'ecart' || d.c === 'refFabasoft')) cl.innerHTML = clistHTML(a);
+    if (d.c === 'refFabasoft') { const h = $('.ccol-form h3'); if (h) h.textContent = constatNum(a, k); }
+    debouncedRefresh(); return;
+  }
+  if (d.s) {
+    const s = store.settings, numeric = ['minutesParExigence'];
+    s[d.s] = numeric.includes(d.s) ? (t.value === '' ? '' : Number(t.value)) : t.value;
+    if (d.s === 'theme') { if (t.value === 'light' || t.value === 'dark') localStorage.setItem('theme', t.value); applyTheme(); }
+    persist(); return;
+  }
+  if (d.lib) { store.settings.libelles[d.lib] = t.value || SETTINGS_DEFAUT.libelles[d.lib]; persist(); return; }
+  if (t.hasAttribute('data-s-procs')) { store.settings.processus = t.value.split('\n').map(x => x.trim()).filter(Boolean); persist(); return; }
+  if (d.f) {
+    const [ns, key] = d.f.split('.'); ui[ns][key] = t.value;
+    const fn = () => (ui.view === 'audit' ? renderTab() : rerender());
+    if (t.tagName === 'SELECT') rerenderKeep(fn); else debouncedFilter(fn);
+    return;
+  }
+  if (t.id === 'imp-header' && ui.imp) { const v = Number(t.value); if (v >= 1) { readImportForm(); ui.imp.header = v; guessMap(); renderImport(); const h = $('#imp-header'); h.focus(); } return; }
+  if (t.id === 'imp-sheet' && ui.imp) { readImportForm(); ui.imp.sheet = Number(t.value); guessHeader(); renderImport(); return; }
+});
+document.addEventListener('change', e => {
+  const t = e.target, d = t.dataset, a = cur();
+  if (t.type !== 'checkbox' && t.type !== 'radio') return;
+  if (d.selAudit) { if (t.checked) ui.progSel.add(d.selAudit); else ui.progSel.delete(d.selAudit); rerenderKeep(rerender); return; }
+  if (t.hasAttribute('data-sel-all')) {
+    const boxes = $$('[data-sel-audit]'); boxes.forEach(b => { if (t.checked) ui.progSel.add(b.dataset.selAudit); else ui.progSel.delete(b.dataset.selAudit); });
+    rerenderKeep(rerender); return;
+  }
+  if (d.proc !== undefined && a) { a.processus = t.checked ? uniq([...a.processus, d.proc]) : a.processus.filter(p => p !== d.proc); touch(a); return; }
+  if (d.aud !== undefined && a) { a.audites[Number(d.aud)][d.k] = t.checked; touch(a); return; }
+  if (d.opt && a) { a.options[d.opt] = t.checked; touch(a); refreshPreview(); return; }
+  if (d.q !== undefined && a) { const it = a.items.find(i => i.id === t.closest('[data-item]').dataset.item); it.questions[Number(d.q)].ok = t.checked; t.closest('label').classList.toggle('done', t.checked); touch(a); return; }
+  if (d.prepRef && a) {
+    const r = refById(d.prepRef);
+    if (t.checked) { addRefsToAudit(a, [r]); touch(a); rerenderKeep(renderTab); refreshTabCounts(); }
+    else { const it = a.items.find(i => i.refId === r.id); if (it) removeItems(a, [it.id], () => { rerenderKeep(renderTab); refreshTabCounts(); }); if (it && itemHasData(it)) t.checked = true; }
+    return;
+  }
+  if (d.prepChap !== undefined && a) {
+    const refs = refsSorted().filter(r => chapOf(r.clause) === d.prepChap && (!ui.prep.q || norm(`${r.clause} ${r.titre} ${r.documents} ${r.processus} ${r.exigence}`).includes(norm(ui.prep.q))));
+    if (t.checked) { addRefsToAudit(a, refs); touch(a); rerenderKeep(renderTab); refreshTabCounts(); }
+    else { const ids = a.items.filter(i => refs.some(r => r.id === i.refId)).map(i => i.id); removeItems(a, ids, () => { rerenderKeep(renderTab); refreshTabCounts(); }); t.checked = ids.length > 0 && a.items.some(i => ids.includes(i.id)); }
+    return;
+  }
+  if (d.f) { const [ns, key] = d.f.split('.'); ui[ns][key] = t.checked; rerenderKeep(rerender); return; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (!$('#modal').classList.contains('hidden')) closeModal(); $$('.menu.open').forEach(m => m.classList.remove('open')); }
+  const t = e.target;
+  if (e.key === 'Enter' && t.hasAttribute && t.hasAttribute('data-qadd')) {
+    e.preventDefault(); const v = t.value.trim(); if (!v) return;
+    const a = cur(), it = a.items.find(i => i.id === t.closest('[data-item]').dataset.item);
+    it.questions.push({ q: v, ok: false }); touch(a); refreshItem(a, it);
+    const ni = $(`#item-${it.id} [data-qadd]`); if (ni) ni.focus();
+  }
+});
+$('#file-json').addEventListener('change', async e => { const f = e.target.files[0]; if (f) importJSONText(await f.text()); });
+$('#file-ref').addEventListener('change', e => { const f = e.target.files[0]; if (f) readRefFile(f); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (store.settings.theme === 'auto') applyTheme(); });
+window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); Storage.save(store); });
+
+applyTheme();
+updateFoot();
+const lastA = store.settings.lastId && store.audits.find(a => a.id === store.settings.lastId);
+if (lastA) ui.currentId = lastA.id;
+updateHeader();
+showView('programme');
+</script>
+</body>
+</html>

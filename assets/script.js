@@ -1,4 +1,4 @@
-/* Shared by the portfolio (index.html) and the tools catalog (outils/index.html). */
+/* Shared by the tools home (index.html) and the profile page (profil/index.html). */
 
 const root = document.documentElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -92,15 +92,17 @@ expandButtons.forEach(btn => {
   });
 });
 
-/* open the row targeted by the URL hash on load */
-(() => {
+/* open the row targeted by the URL hash, on load and when an in-page link points to it */
+const openFromHash = () => {
   const target = location.hash && document.getElementById(location.hash.slice(1));
   if (target && target.classList.contains('project-row')) {
     setOpen(target, true);
     requestAnimationFrame(() => target.scrollIntoView({ block: 'start' }));
   }
   updateExpandButtons();
-})();
+};
+openFromHash();
+window.addEventListener('hashchange', openFromHash);
 
 /* ─── ACTIVE NAV + SCROLL PROGRESS ───────────────────────── */
 const sections = [...document.querySelectorAll('main [id]')].filter(el => el.matches('section, .masthead'));
@@ -139,7 +141,7 @@ if (!reduceMotion && 'IntersectionObserver' in window) {
     });
 
   document.querySelectorAll(
-    '.section-label, .section-intro, .project-table, .tool-card, .profile-grid, .expertise-table, .contact-grid'
+    '.section-label, .section-intro, .project-table, .principles, .author, .profile-grid, .expertise-table, .contact-grid'
   ).forEach(el => el.classList.add('fade-in'));
 
   const observer = new IntersectionObserver(entries => {
