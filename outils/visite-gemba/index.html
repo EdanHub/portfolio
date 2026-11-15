@@ -6,7 +6,10 @@
 <meta name="theme-color" content="#2f4f6b">
 <title>Visite terrain Gemba · Outils qualité · Edân Colak</title>
 <meta name="description" content="Outil de visite terrain (Gemba walk) qualité et sûreté, atelier et bureau : grille d'observation, photos, synthèse, compte rendu Word ou PDF et pilotage des visites. Pensé pour le téléphone, hors ligne, données locales.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F5F2EA'/%3E%3Ctext x='5' y='23' font-family='Helvetica' font-size='18' font-weight='700' fill='%231A1A1A'%3EEC%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="../../site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Outils qualité">
 <script>
   /* Thème partagé avec le site (clé 'theme'), appliqué avant le rendu pour éviter le flash */
   (function () {
@@ -275,6 +278,11 @@ table.tbl tr.click:hover td{background:var(--hover)}
 .report td{padding:4px 6px;border:1px solid #a0a7b0;vertical-align:top;white-space:pre-wrap}
 .report .org{color:#5f6b7a;font-size:12.5px;text-transform:uppercase;letter-spacing:.05em}
 .report img{max-width:100%;max-height:260px}
+@media (max-width:600px){
+  .report{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:14px 12px}
+  .report table{font-size:12px}
+  .report th,.report td{padding:3px 5px}
+}
 .exports{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 14px}
 @media (min-width:700px){.exports{grid-template-columns:repeat(5,1fr)}}
 .exports .btn:last-child:nth-child(odd){grid-column:span 2}

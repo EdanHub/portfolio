@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Audit interne ISO 19443 · Outils qualité · Edân Colak</title>
 <meta name="description" content="Outil d'audit interne ISO 19443 / ISO 9001 : préparation, plan d'audit, checklist terrain, rédaction des constats, vérification avant émission et rapport Word ou PDF. Hors ligne, données locales.">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F5F2EA'/%3E%3Ctext x='5' y='23' font-family='Helvetica' font-size='18' font-weight='700' fill='%231A1A1A'%3EEC%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png">
+<link rel="manifest" href="../../site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Outils qualité">
 <script>
   /* Thème partagé avec le site (clé 'theme'), appliqué avant le rendu pour éviter le flash */
   (function () {
@@ -295,6 +298,7 @@ td.selcell input,th.selcell input{width:17px;height:17px;cursor:pointer}
 .preview-frame{width:100%;height:78vh;min-height:420px;border:1px solid var(--border2);border-radius:6px;background:#fff}
 table.plan-tbl td{padding:4px 6px}
 table.plan-tbl input{padding:4px 6px}
+@media (max-width: 440px){header .brand{display:none}}
 @media (max-width: 700px){
   body{font-size:14px}
   input[type=text],input[type=search],input[type=date],input[type=number],select,textarea{font-size:16px;padding:8px 10px}
@@ -304,7 +308,9 @@ table.plan-tbl input{padding:4px 6px}
   .m-inline{display:inline}
   .m-only{display:block}
   .btn.m-only{display:inline-flex}
-  header{gap:8px;padding:0 10px}
+  header{gap:8px;padding:0 10px;min-width:0}
+  header .btn{padding:7px 10px}
+  .site-back{padding-right:8px}
   .brand{font-size:14px}
   .hdr-current{display:none}
   nav button{padding:7px 10px}

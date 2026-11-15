@@ -1,0 +1,15 @@
+{
+  "name": "Outils qualité · Edân Colak",
+  "short_name": "Outils qualité",
+  "description": "Outils qualité autonomes : arbre des causes, audit interne ISO 19443, visite terrain Gemba.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "browser",
+  "background_color": "#F5F2EA",
+  "theme_color": "#F5F2EA",
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
