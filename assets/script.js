@@ -1,6 +1,12 @@
-/* Shared by the tools home (index.html) and the profile page (profil/index.html). */
+/* Shared by both tools homes (index.html with profile, outils/index.html without) and the profile page. */
 
 const root = document.documentElement;
+
+/* remember which home page (with or without profile) the visitor came from:
+   the "← Outils" link inside each tool returns there */
+if (document.body.hasAttribute('data-home')) {
+  try { sessionStorage.setItem('outils-home', location.pathname); } catch (e) { /* storage blocked */ }
+}
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ─── THEME TOGGLE ───────────────────────────────────────── */

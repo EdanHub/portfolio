@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Arbre des causes · Outils qualité · Edân Colak</title>
+<title>Arbre des causes · Outils qualité</title>
 <meta name="description" content="Outil d'analyse de causes (arbre des causes, 5M/8M) : création, contrôle de la qualité de l'analyse, bibliothèque de causes, retour d'expérience et exports PDF, Word, Visio, Excel. Hors ligne, données locales.">
-<link rel="icon" type="image/png" sizes="32x32" href="../../assets/icons/favicon-32.png?v=2">
-<link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png?v=2">
-<link rel="manifest" href="../../site.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="../../assets/icons/favicon-32.png?v=3">
+<link rel="apple-touch-icon" href="../../assets/icons/apple-touch-icon.png?v=3">
+<link rel="manifest" href="../site.webmanifest">
 <meta name="apple-mobile-web-app-title" content="Outils qualité">
 <script>
   /* Thème partagé avec le site (clé 'theme'), appliqué avant le rendu pour éviter le flash */
@@ -279,7 +279,8 @@ table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
 <body>
 <div class="app">
   <header>
-    <a class="site-back" href="../../" title="Retour à la boîte à outils">&larr; Outils</a>
+    <a class="site-back" href="../" title="Retour aux outils">&larr; Outils</a>
+    <script>/* revient à la page d'accueil d'où l'on vient (avec ou sans profil) */ try { var h = sessionStorage.getItem('outils-home'); if (h && h.charAt(0) === '/' && h.indexOf('//') < 0 && h.indexOf(':') < 0) document.currentScript.previousElementSibling.href = h; } catch (e) {}</script>
     <div class="brand">Arbre des causes<span>analyse et retour d'expérience</span></div>
     <div class="hdr-current" id="hdr-current"></div>
     <div class="spacer"></div>

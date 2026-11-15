@@ -24,17 +24,30 @@ Par défaut, aucune donnée n'est envoyée : tout est stocké dans le navigateur
 et IndexedDB pour les photos de la visite Gemba). Seule exception, facultative : la visite
 Gemba peut envoyer ses comptes rendus vers un flux Power Automate configuré par l'organisation.
 
+## Deux points d'entrée
+
+| Adresse | Contenu | Usage |
+|---------|---------|-------|
+| `/outils/` | Catalogue des outils seul, sans nom ni profil | Lien à donner aux collaborateurs |
+| `/` | Catalogue des outils, section Auteur et lien vers le profil | Lien pour le CV ou un partage plus personnel |
+| `/profil/` | Profil, réalisations, expertise, contact | Accessible depuis `/` |
+
+Les pages des outils sont communes aux deux versions et ne citent pas l'auteur. Leur lien
+« ← Outils » ramène à la page d'accueil d'où vient le visiteur.
+
 ## Structure
 
 ```
-index.html              page d'accueil : catalogue des outils
+index.html              accueil avec profil : catalogue + auteur
+outils/index.html       accueil sans profil : catalogue seul
 outils/<outil>/         un dossier par outil (index.html autonome)
 profil/                 profil et réalisations de l'auteur
-assets/                 feuille de style et script communs au site
+assets/                 feuille de style, script et icônes communs au site
 ```
 
 Pour ajouter un outil : déposer son fichier dans `outils/<nom>/index.html`, puis ajouter
-une ligne au catalogue de `index.html` (modèle `outil-NN`) et à la table ci-dessus.
+une ligne au catalogue (modèle `outil-NN`) dans **les deux** pages d'accueil,
+`index.html` et `outils/index.html`, ainsi qu'à la table ci-dessus.
 
 ## Auteur
 
