@@ -1,0 +1,1911 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbre des causes · Outils qualité · Edân Colak</title>
+<meta name="description" content="Outil d'analyse de causes (arbre des causes, 5M/8M) : création, contrôle de la qualité de l'analyse, bibliothèque de causes, retour d'expérience et exports PDF, Word, Visio, Excel. Hors ligne, données locales.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23F5F2EA'/%3E%3Ctext x='5' y='23' font-family='Helvetica' font-size='18' font-weight='700' fill='%231A1A1A'%3EEC%3C/text%3E%3C/svg%3E">
+<script>
+  /* Thème partagé avec le site (clé 'theme'), appliqué avant le rendu pour éviter le flash */
+  (function () {
+    var t = localStorage.getItem('theme');
+    if (t !== 'light' && t !== 'dark') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<!--
+  Arbre des causes : création, capitalisation et export d'analyses de causes.
+  Fichier autonome : HTML, CSS et JavaScript sans aucune dépendance externe.
+  Fonctionne hors ligne, ouverture directe dans Edge, Chrome ou Firefox.
+
+  Architecture du code (section <script>) :
+    1. Constantes métier (types de nœuds, familles 5M/8M, statuts)
+    2. Utilitaires (dates, couleurs, texte, similarité)
+    3. Stockage (adaptateur LocalStorage, remplaçable par SharePoint/OneDrive)
+    4. Modèle (analyses, nœuds, numérotation, versions, bibliothèque)
+    5. Géométrie (calcul de la disposition de l'arbre, source unique de tous les rendus)
+    6. Rendu écran et interactions (éditeur)
+    7. Vues : analyses, bibliothèque, REX, paramètres
+    8. Exports : registre Exporters (PDF, DOCX, VSDX, SVG, PNG, XLSX, JSON)
+-->
+<style>
+:root{
+  --bg:#f3f4f6; --panel:#ffffff; --panel2:#f8f9fa; --border:#d9dde3; --border2:#c3c9d1;
+  --text:#1f2933; --muted:#5f6b7a; --accent:#2f4f6b; --accent2:#3f6a8f; --accent-text:#ffffff;
+  --hover:#eceff3; --danger:#a23434; --warn:#9a6a12; --ok:#2e6b3a; --canvas:#fafbfc; --dot:#dde1e6;
+  --edge:#8792a2; --sel:#2f4f6b; --drop:#d9822b; --bar:#6b8299; --bar2:#c0392b;
+  color-scheme: light;
+}
+:root[data-theme="dark"]{
+  --bg:#15181c; --panel:#1e2226; --panel2:#24292e; --border:#343a41; --border2:#454c55;
+  --text:#e3e6ea; --muted:#9aa4b0; --accent:#7fa6c6; --accent2:#9dbad3; --accent-text:#11161b;
+  --hover:#2a3036; --danger:#e07a7a; --warn:#d9a845; --ok:#7cc08a; --canvas:#191c20; --dot:#262b31;
+  --edge:#6f7a87; --sel:#9dbad3; --drop:#e0a060; --bar:#7d93a8; --bar2:#d46a5e;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font:13px/1.45 Calibri,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text)}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-rows:48px 1fr;grid-template-columns:196px 1fr;height:100vh}
+header{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+.brand{font-weight:700;font-size:15px;white-space:nowrap}
+.brand span{font-weight:400;color:var(--muted);margin-left:6px}
+.site-back{color:var(--muted);text-decoration:none;white-space:nowrap;padding:4px 10px 4px 0;border-right:1px solid var(--border);font-size:12.5px}
+.site-back:hover{color:var(--accent)}
+.site-back:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.hdr-current{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);border-left:1px solid var(--border);padding-left:14px}
+.hdr-current b{color:var(--text)}
+.spacer{flex:1}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+nav{background:var(--panel);border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+nav button{all:unset;padding:8px 12px;border-radius:6px;cursor:pointer;color:var(--text)}
+nav button:hover{background:var(--hover)}
+nav button.active{background:var(--hover);font-weight:600;box-shadow:inset 3px 0 0 var(--accent)}
+nav .nav-foot{margin-top:auto;padding:8px 10px;font-size:11.5px;color:var(--muted);line-height:1.4}
+main{position:relative;overflow:hidden;min-width:0}
+.view{display:none;height:100%;overflow:auto;padding:20px 24px 40px}
+.view.active{display:block}
+#view-editor{padding:0}
+#view-editor.active{display:grid;grid-template-rows:auto 1fr;grid-template-columns:minmax(0,1fr) 340px}
+h2{font-size:18px;margin:0 0 4px}
+h3{font-size:14.5px;margin:22px 0 8px}
+.lead{color:var(--muted);margin:0 0 16px;max-width:900px}
+
+/* Boutons et champs */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--border2);background:var(--panel);border-radius:5px;cursor:pointer;white-space:nowrap;line-height:1.35}
+.btn:hover{background:var(--hover)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+.btn.primary:hover{background:var(--accent2)}
+.btn.danger{color:var(--danger)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.btn.sm{padding:2px 8px;font-size:12px}
+.btn.icon{padding:5px 9px;min-width:30px;justify-content:center}
+input[type=text],input[type=search],input[type=date],select,textarea{width:100%;padding:5px 8px;border:1px solid var(--border2);border-radius:5px;background:var(--panel);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+textarea{resize:vertical;min-height:54px}
+input[type=color]{width:42px;height:26px;padding:0;border:1px solid var(--border2);border-radius:4px;background:none;cursor:pointer}
+.fld{display:block;margin:0 0 10px}
+.fld>span{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin-bottom:3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chk{display:flex;align-items:center;gap:6px;cursor:pointer}
+
+/* Barre d'outils de l'éditeur */
+.toolbar{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-bottom:1px solid var(--border)}
+.toolbar .sep{width:1px;height:22px;background:var(--border);margin:0 4px}
+.toolbar select{width:auto;padding:4px 6px}
+.zoomval{min-width:48px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.dropdown{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--border2);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:250px;padding:4px;z-index:50;display:none}
+.menu.open{display:block}
+.menu button{all:unset;display:block;width:100%;box-sizing:border-box;padding:7px 10px;border-radius:4px;cursor:pointer}
+.menu button:hover{background:var(--hover)}
+.menu button small{display:block;color:var(--muted);font-size:11.5px}
+.menu .msep{height:1px;background:var(--border);margin:4px 2px}
+
+/* Canevas */
+.canvas-wrap{position:relative;overflow:hidden;background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:18px 18px;min-height:0}
+#svg{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none}
+#svg.panning{cursor:grabbing}
+#svg .node{cursor:pointer}
+#svg .edge{fill:none;stroke:var(--edge);stroke-width:1.4}
+#svg .selring{fill:none;stroke:var(--sel);stroke-width:2.2}
+#svg .dropring{fill:none;stroke:var(--drop);stroke-width:2.6;stroke-dasharray:6 3}
+#svg .tog{cursor:pointer}
+#svg .tog circle{fill:var(--panel);stroke:var(--border2)}
+#svg .tog text{fill:var(--text);font:600 10px Arial}
+#svg .tog line{stroke:var(--text);stroke-width:1.4}
+.canvas-hint{position:absolute;left:12px;bottom:10px;font-size:11.5px;color:var(--muted);background:color-mix(in srgb,var(--panel) 88%,transparent);padding:4px 8px;border-radius:5px;border:1px solid var(--border);pointer-events:none;max-width:calc(100% - 24px)}
+.empty-editor[hidden]{display:none}
+.empty-editor{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--muted)}
+
+/* Inspecteur */
+.inspector{border-left:1px solid var(--border);background:var(--panel);overflow:auto;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);z-index:2}
+.tabs button{all:unset;flex:1;text-align:center;padding:9px 4px;cursor:pointer;color:var(--muted);font-size:12.5px;border-bottom:2px solid transparent}
+.tabs button.active{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.tabs button .cnt{display:inline-block;min-width:16px;padding:0 4px;margin-left:3px;border-radius:8px;background:var(--hover);font-size:11px;font-weight:600}
+.pane{padding:14px}
+.typebar{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 10px;border-radius:6px;background:var(--panel2);border:1px solid var(--border)}
+.swatch{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+.sugg{margin:-4px 0 10px;border:1px solid var(--border);border-radius:5px;background:var(--panel2);font-size:12px}
+.sugg div.h{padding:4px 8px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border)}
+.sugg button{all:unset;display:block;width:100%;box-sizing:border-box;padding:5px 8px;cursor:pointer}
+.sugg button:hover{background:var(--hover)}
+.sugg button em{font-style:normal;color:var(--muted)}
+.questions{margin:6px 0 12px;padding:9px 11px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;font-size:12px}
+.questions b{display:block;margin-bottom:4px}
+.questions ol{margin:0;padding-left:18px}
+.btnrow{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}
+.meta-ro{font-size:11.5px;color:var(--muted);margin-top:4px}
+.issue{display:block;width:100%;text-align:left;border:1px solid var(--border);border-left:3px solid var(--warn);background:var(--panel);border-radius:5px;padding:6px 9px;margin:0 0 6px;cursor:pointer;font-size:12.5px}
+.issue.crit{border-left-color:var(--danger)}
+.issue.info{border-left-color:var(--border2);cursor:default}
+.issue:hover{background:var(--hover)}
+.score{margin:0 0 10px}
+.score .lbl{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.meter{height:7px;background:var(--hover);border-radius:4px;overflow:hidden}
+.meter span{display:block;height:100%;background:var(--accent)}
+.vitem{border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:8px}
+.vitem .vh{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+
+/* Tableaux */
+.tbl-wrap{overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--panel)}
+table.t{border-collapse:collapse;width:100%;font-size:12.5px}
+table.t th{text-align:left;font-weight:600;background:var(--panel2);color:var(--muted);padding:7px 9px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0}
+table.t td{padding:6px 9px;border-bottom:1px solid var(--border);vertical-align:top}
+table.t tr:last-child td{border-bottom:none}
+table.t tbody tr.click{cursor:pointer}
+table.t tbody tr.click:hover td{background:var(--hover)}
+table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;padding:0 7px;border-radius:9px;font-size:11.5px;border:1px solid var(--border2);color:var(--muted);white-space:nowrap}
+.tag.ok{color:var(--ok);border-color:currentColor}
+.tag.warn{color:var(--warn);border-color:currentColor}
+.tag.crit{color:var(--danger);border-color:currentColor}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.filters input[type=search]{max-width:340px}
+.filters select{width:auto}
+
+/* REX */
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 6px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:12px 14px;min-width:0}
+.card h3{margin:0 0 4px}
+.card p.sub{margin:0 0 10px;color:var(--muted);font-size:12px}
+.bars .br{display:grid;grid-template-columns:minmax(110px,40%) 1fr 34px;gap:8px;align-items:center;margin:4px 0;font-size:12.5px}
+.bars .br .bl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bars .track{height:10px;background:var(--hover);border-radius:3px;overflow:hidden;position:relative}
+.bars .track span{position:absolute;left:0;top:0;bottom:0;background:var(--bar)}
+.bars .track span.r{background:var(--bar2);top:5px}
+.bars .track span.a{bottom:5px}
+.bars .bv{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.lgd{display:flex;gap:14px;font-size:11.5px;color:var(--muted);margin-top:6px}
+.lgd i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.linkish{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+
+/* Modale et notifications */
+.modal{position:fixed;inset:0;background:rgba(15,20,25,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 16px;z-index:100}
+.modal.hidden{display:none}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 18px 50px rgba(0,0,0,.25);width:min(760px,100%);max-height:88vh;display:flex;flex-direction:column}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.modal-head h3{margin:0}
+#modal-body{padding:14px 16px;overflow:auto}
+#modal-foot{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+#modal-foot:empty{display:none}
+#toast{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:200}
+#toast div{background:var(--text);color:var(--panel);padding:8px 14px;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.2);max-width:420px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cmp ul{margin:4px 0 0;padding-left:18px}
+.note{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:12.5px;max-width:900px}
+.colors{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 18px;max-width:900px}
+.colors label{display:flex;align-items:center;gap:10px}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 16px;max-width:900px}
+
+@media (max-width:1100px){
+  #view-editor.active{grid-template-columns:minmax(0,1fr) 290px}
+}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr;grid-template-rows:48px auto 1fr}
+  nav{flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--border);padding:6px}
+  nav .nav-foot{display:none}
+  .hdr-current{display:none}
+  #view-editor.active{grid-template-columns:1fr;grid-template-rows:auto minmax(320px,1fr) auto}
+  .inspector{border-left:none;border-top:1px solid var(--border);max-height:45vh}
+  .cards{grid-template-columns:1fr}
+  .grid2,.cmp{grid-template-columns:1fr}
+  .view{padding:14px 16px 30px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a class="site-back" href="../" title="Retour à la boîte à outils">&larr; Outils</a>
+    <div class="brand">Arbre des causes<span>analyse et retour d'expérience</span></div>
+    <div class="hdr-current" id="hdr-current"></div>
+    <div class="spacer"></div>
+    <span id="save-state" class="muted small"></span>
+    <button class="btn ghost" id="btn-theme" type="button">Thème sombre</button>
+  </header>
+  <nav id="nav">
+    <button data-view="list" type="button">Analyses</button>
+    <button data-view="editor" type="button">Éditeur</button>
+    <button data-view="library" type="button">Bibliothèque de causes</button>
+    <button data-view="rex" type="button">Retour d'expérience</button>
+    <button data-view="settings" type="button">Paramètres</button>
+    <div class="nav-foot" id="nav-foot"></div>
+  </nav>
+  <main>
+    <section id="view-list" class="view"></section>
+    <section id="view-editor" class="view">
+      <div class="toolbar" id="toolbar">
+        <button class="btn" data-act="add-child" type="button" title="Ajouter une cause sous l'élément sélectionné (Tab)">Cause</button>
+        <button class="btn" data-act="add-sibling" type="button" title="Ajouter une cause au même niveau (Entrée)">Cause au même niveau</button>
+        <button class="btn" data-act="add-racine" type="button">Cause racine</button>
+        <button class="btn" data-act="add-corrective" type="button">Action corrective</button>
+        <button class="btn" data-act="add-preventive" type="button">Action préventive</button>
+        <span class="sep"></span>
+        <button class="btn" data-act="delete" type="button" title="Supprimer l'élément et sa branche (Suppr)">Supprimer</button>
+        <button class="btn" data-act="undo" type="button" title="Annuler (Ctrl+Z)">Annuler</button>
+        <button class="btn" data-act="redo" type="button" title="Rétablir (Ctrl+Y)">Rétablir</button>
+        <span class="sep"></span>
+        <button class="btn" data-act="collapse" type="button" title="Replier ou déplier la branche sélectionnée">Replier</button>
+        <button class="btn" data-act="expand-all" type="button">Tout déplier</button>
+        <span class="sep"></span>
+        <button class="btn icon" data-act="zoom-out" type="button" title="Dézoomer">&minus;</button>
+        <span class="zoomval" id="zoomval">100 %</span>
+        <button class="btn icon" data-act="zoom-in" type="button" title="Zoomer">+</button>
+        <button class="btn" data-act="fit" type="button" title="Centrer et ajuster l'arbre à l'écran">Ajuster</button>
+        <button class="btn" data-act="relayout" type="button" title="Annuler les déplacements manuels et réorganiser">Réorganiser</button>
+        <select id="orient" title="Sens de lecture de l'arbre">
+          <option value="droite">Causes vers la droite</option>
+          <option value="gauche">Causes vers la gauche</option>
+          <option value="bas">Causes vers le bas</option>
+        </select>
+        <span class="spacer"></span>
+        <button class="btn" data-act="version" type="button">Enregistrer une version</button>
+        <div class="dropdown">
+          <button class="btn primary" data-act="export-menu" type="button">Exporter</button>
+          <div class="menu" id="export-menu"></div>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvas-wrap">
+        <svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="viewport"></g></svg>
+        <div class="canvas-hint">Glisser un élément pour le déplacer, le déposer sur un autre pour le rattacher. Molette pour zoomer, glisser le fond pour se déplacer. Double-clic pour modifier le libellé.</div>
+        <div class="empty-editor" id="empty-editor" hidden>
+          <div>Aucune analyse ouverte.</div>
+          <div class="row"><button class="btn primary" data-act="new" type="button">Nouvelle analyse</button><button class="btn" data-goto="list" type="button">Ouvrir une analyse existante</button></div>
+        </div>
+      </div>
+      <aside class="inspector" id="inspector"></aside>
+    </section>
+    <section id="view-library" class="view"></section>
+    <section id="view-rex" class="view"></section>
+    <section id="view-settings" class="view"></section>
+  </main>
+</div>
+
+<div class="modal hidden" id="modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="modal-title"></h3><button class="btn ghost" id="modal-close" type="button">Fermer</button></div>
+    <div id="modal-body"></div>
+    <div id="modal-foot"></div>
+  </div>
+</div>
+<div id="toast"></div>
+<input type="file" id="file-input" accept=".json,application/json" hidden>
+<iframe id="print-frame" title="Impression du rapport" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden"></iframe>
+
+<script>
+'use strict';
+/* =====================================================================
+   1. CONSTANTES MÉTIER
+   ===================================================================== */
+const APP = { nom: 'Arbre des causes', version: '1.0', schema: 1 };
+const STORE_KEY = 'arbre-des-causes.base.v1';
+
+/* Types de nœuds. kind : event (fait observé), cause, action.
+   Les couleurs sont les valeurs par défaut, modifiables dans Paramètres. */
+const TYPES = [
+  { id: 'evenement',         label: 'Événement',               kind: 'event',  color: '#7a1f1f' },
+  { id: 'immediate',         label: 'Cause immédiate',         kind: 'cause',  color: '#d9822b' },
+  { id: 'contributive',      label: 'Cause contributive',      kind: 'cause',  color: '#d1a429' },
+  { id: 'organisationnelle', label: 'Cause organisationnelle', kind: 'cause',  color: '#7b5ea7' },
+  { id: 'humaine',           label: 'Cause humaine',           kind: 'cause',  color: '#3f6fb0' },
+  { id: 'technique',         label: 'Cause technique',         kind: 'cause',  color: '#2a9bb0' },
+  { id: 'documentaire',      label: 'Cause documentaire',      kind: 'cause',  color: '#4f8f4a' },
+  { id: 'manageriale',       label: 'Cause managériale',       kind: 'cause',  color: '#8a6a3e' },
+  { id: 'racine',            label: 'Cause racine',            kind: 'cause',  color: '#c0392b' },
+  { id: 'corrective',        label: 'Action corrective',       kind: 'action', color: '#2e6b3a' },
+  { id: 'preventive',        label: 'Action préventive',       kind: 'action', color: '#25467a' }
+];
+const TYPE = Object.fromEntries(TYPES.map(t => [t.id, t]));
+const FAMILLES_8M = ["Main d'œuvre", 'Méthode', 'Matière', 'Machine', 'Milieu', 'Management', 'Mesure', 'Maintenance'];
+const FAMILLES_5M = ["Main d'œuvre", 'Méthode', 'Milieu', 'Matière', 'Matériel'];
+const STATUTS_CAUSE = ['À vérifier', 'Confirmée', 'Écartée'];
+const STATUTS_ACTION = ['Ouverte', 'En cours', 'Clôturée'];
+const EFFICACITES = ['Non évaluée', 'Efficace', 'Non efficace'];
+const GRAVITES = ['', 'Mineure', 'Significative', 'Majeure', 'Critique'];
+const STATUTS_ANALYSE = ['En cours', 'En validation', 'Clôturée', 'Archivée'];
+const GENERIQUES = ['erreur humaine', 'manque de rigueur', 'oubli', 'inattention', 'negligence', 'faute', 'probleme', 'non respect', 'manque d attention', 'erreur'];
+
+const QUESTIONS = {
+  event: ["Que s'est-il passé exactement, où et quand ?", "Quel écart par rapport à l'exigence ou à l'attendu ?", "Quelles conséquences ont été constatées ?"],
+  immediate: ['Pourquoi cela est-il arrivé ?', "Qu'est-ce qui a permis que cela arrive ?", "Quel fait vérifiable le démontre ?"],
+  cause: ["Qu'est-ce qui a permis que cela arrive ?", 'Quel mécanisme de prévention ou de détection aurait dû l’empêcher ?', "Pourquoi ce mécanisme n'a-t-il pas fonctionné ?"],
+  racine: ['Existe-t-il un problème systémique sous-jacent ?', 'Si cette cause est traitée, le problème peut-il se reproduire ailleurs ?', "Cette cause relève-t-elle d'une décision ou d'une organisation que l'on peut modifier ?"],
+  action: ["L'action supprime-t-elle la cause ou seulement l'effet ?", "Comment l'efficacité sera-t-elle vérifiée, et à quelle date ?", "L'action doit-elle être étendue à d'autres produits, postes ou sites ?"]
+};
+
+const DEFAULT_SETTINGS = {
+  auteur: '', organisation: '', site: '', prefixe: 'AC',
+  orientation: 'droite', style: 'teinte', theme: 'auto', classification: '8M', couleurs: {}, lastId: null
+};
+
+const DEFAULT_LIBRARY = [
+  ['documentaire', 'Méthode', 'Procédure obsolète'], ['documentaire', 'Méthode', 'Procédure ambiguë'],
+  ['documentaire', 'Méthode', 'Procédure absente'], ['documentaire', 'Méthode', 'Document au mauvais indice au poste de travail'],
+  ['documentaire', 'Méthode', 'Diffusion documentaire insuffisante'], ['documentaire', 'Méthode', 'Validation documentaire incomplète'],
+  ['humaine', "Main d'œuvre", 'Formation insuffisante'], ['humaine', "Main d'œuvre", 'Mauvaise compréhension de la consigne'],
+  ['humaine', "Main d'œuvre", 'Erreur de manipulation'], ['humaine', "Main d'œuvre", 'Habilitation non vérifiée'],
+  ['humaine', "Main d'œuvre", 'Interruption de tâche non maîtrisée'],
+  ['organisationnelle', 'Management', 'Charge de travail excessive'], ['organisationnelle', 'Management', 'Ressources insuffisantes'],
+  ['organisationnelle', 'Management', 'Priorités conflictuelles'], ['organisationnelle', 'Management', 'Responsabilités non définies'],
+  ['organisationnelle', 'Management', 'Interface entre services mal définie'],
+  ['technique', 'Machine', 'Panne équipement'], ['technique', 'Maintenance', 'Maintenance préventive insuffisante'],
+  ['technique', 'Mesure', 'Moyen de mesure non étalonné'], ['technique', 'Machine', 'Outillage inadapté'],
+  ['manageriale', 'Management', 'Absence de vérification indépendante'], ['manageriale', 'Management', 'Indicateurs de suivi absents'],
+  ['manageriale', 'Management', "Retour d'expérience non exploité"], ['manageriale', 'Management', 'Exigence client non déclinée'],
+  ['corrective', '', 'Mettre à jour la procédure et la rediffuser'], ['corrective', '', 'Retirer les documents périmés des postes'],
+  ['corrective', '', 'Former et habiliter les opérateurs concernés'],
+  ['preventive', '', 'Ajouter un point de contrôle au plan de contrôle'], ['preventive', '', 'Mettre en place une vérification indépendante'],
+  ['preventive', '', "Intégrer le sujet à l'audit de poste"]
+];
+
+/* =====================================================================
+   2. UTILITAIRES
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const uid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+  : 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const xesc = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const deep = o => JSON.parse(JSON.stringify(o));
+const z2 = n => String(n).padStart(2, '0');
+const isoLocal = (d = new Date()) => `${d.getFullYear()}-${z2(d.getMonth() + 1)}-${z2(d.getDate())}`;
+const nowIso = () => new Date().toISOString();
+function fmtDate(iso) { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return (y && m && d) ? `${d}/${m}/${y}` : String(iso); }
+function fmtDateTime(iso) { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? iso : `${fmtDate(isoLocal(d))} ${z2(d.getHours())}:${z2(d.getMinutes())}`; }
+function slug(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'analyse'; }
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+/* Couleurs */
+function hexToRgb(h) { h = String(h || '#000').replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16) || 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbToHex(c) { return '#' + c.map(v => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join(''); }
+function mix(a, b, t) { const A = hexToRgb(a), B = hexToRgb(b); return rgbToHex(A.map((v, i) => v + (B[i] - v) * t)); }
+function luminance(hex) { return hexToRgb(hex).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0); }
+/* Seuil de luminance 0,225 : point où le contraste WCAG est égal avec le blanc et avec le texte sombre */
+const textOn = hex => luminance(hex) > 0.225 ? '#1f2933' : '#ffffff';
+const colorOf = type => (store.settings.couleurs || {})[type] || (TYPE[type] || TYPE.contributive).color;
+
+/* Mesure et découpage du texte (police identique à l'export) */
+const mctx = document.createElement('canvas').getContext('2d');
+function wrap(text, font, maxW) {
+  mctx.font = font; const out = [];
+  for (const para of String(text ?? '').split(/\n/)) {
+    const words = para.split(/\s+/).filter(Boolean);
+    if (!words.length) { out.push(''); continue; }
+    let line = '';
+    for (let w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (mctx.measureText(test).width <= maxW) { line = test; continue; }
+      if (line) { out.push(line); line = ''; }
+      while (mctx.measureText(w).width > maxW && w.length > 1) {
+        let i = w.length; while (i > 1 && mctx.measureText(w.slice(0, i)).width > maxW) i--;
+        out.push(w.slice(0, i)); w = w.slice(i);
+      }
+      line = w;
+    }
+    if (line) out.push(line);
+  }
+  while (out.length > 1 && out[out.length - 1] === '') out.pop();
+  return out.length ? out : [''];
+}
+
+/* Similarité textuelle : coefficient de Sørensen-Dice sur les bigrammes de caractères,
+   complété par une inclusion de mots pour rattacher une cause à une entrée du référentiel. */
+const STOP = new Set(['de', 'la', 'le', 'les', 'des', 'du', 'd', 'l', 'un', 'une', 'et', 'en', 'a', 'au', 'aux', 'pour', 'par', 'sur', 'dans', 'avec', 'lors', 'est', 'sont', 'ete', 'qui', 'que', 'ou']);
+function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/œ/g, 'oe').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && !STOP.has(w)).join(' '); }
+const _bg = new Map();
+function bigrams(s) {
+  if (_bg.has(s)) return _bg.get(s);
+  const m = new Map(), t = ' ' + s + ' ';
+  for (let i = 0; i < t.length - 1; i++) { const b = t.substr(i, 2); m.set(b, (m.get(b) || 0) + 1); }
+  if (_bg.size > 5000) _bg.clear(); _bg.set(s, m); return m;
+}
+function dice(a, b) {
+  if (!a || !b) return 0; if (a === b) return 1;
+  const A = bigrams(a), B = bigrams(b); let inter = 0, na = 0, nb = 0;
+  for (const v of A.values()) na += v; for (const v of B.values()) nb += v;
+  for (const [k, v] of A) if (B.has(k)) inter += Math.min(v, B.get(k));
+  return 2 * inter / (na + nb);
+}
+/* Vrai si tous les mots de la référence figurent dans le texte (racines de 5 lettres) */
+function contains(refNorm, textNorm) {
+  const r = refNorm.split(' ').filter(Boolean); if (r.length < 1) return false;
+  const t = new Set(textNorm.split(' ').map(w => w.slice(0, 5)));
+  return r.every(w => t.has(w.slice(0, 5)));
+}
+
+/* =====================================================================
+   3. STOCKAGE
+   Adaptateur unique : pour une version Microsoft 365, remplacer load/save
+   par des appels SharePoint (liste ou bibliothèque) ou OneDrive.
+   ===================================================================== */
+const Storage = {
+  load() {
+    try { const raw = localStorage.getItem(STORE_KEY); return raw ? JSON.parse(raw) : null; }
+    catch (e) { console.error(e); return null; }
+  },
+  save(data) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); return true; }
+    catch (e) { console.error(e); toast("Enregistrement impossible : espace de stockage du navigateur saturé. Exporter la base puis supprimer d'anciennes analyses."); return false; }
+  },
+  size() { try { return (localStorage.getItem(STORE_KEY) || '').length; } catch (e) { return 0; } }
+};
+
+let store = null;
+function initStore() {
+  const s = Storage.load();
+  store = s && s.analyses ? s : { schema: APP.schema, analyses: [], library: [], settings: {} };
+  store.settings = Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
+  if (!Array.isArray(store.library) || (!store.library.length && !store._libInit)) {
+    store.library = DEFAULT_LIBRARY.map(([type, famille, label]) => ({ id: uid(), type, famille, label }));
+    store._libInit = true;
+  }
+  store.analyses.forEach(normalizeAnalysis);
+}
+function normalizeAnalysis(an) {
+  const base = { numero: '', titre: '', description: '', consequences: '', gravite: '', date: '', site: '', processus: '',
+    refRI: '', refFNC: '', refCAPA: '', refAutre: '', auteur: '', validateur: '', statut: 'En cours', modele: false,
+    orientation: 'droite', nodes: [], versions: [], createdAt: nowIso(), updatedAt: nowIso() };
+  for (const k in base) if (an[k] === undefined) an[k] = base[k];
+  an.nodes.forEach(n => {
+    const d = { parentId: null, order: 0, type: 'contributive', label: '', description: '', preuve: '', famille: '', statut: '',
+      responsable: '', echeance: '', efficacite: '', reference: '', auteur: '', createdAt: an.createdAt, dx: 0, dy: 0, collapsed: false };
+    for (const k in d) if (n[k] === undefined) n[k] = d[k];
+  });
+  if (!an.nodes.some(n => !n.parentId)) an.nodes.unshift(mkNode({ type: 'evenement', label: an.titre || 'Fait observé' }));
+  return an;
+}
+let saveTimer = null;
+function persist(now) {
+  clearTimeout(saveTimer);
+  const doSave = () => { if (Storage.save(store)) { $('#save-state').textContent = 'Enregistré à ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); updateFoot(); } };
+  if (now) doSave(); else { $('#save-state').textContent = 'Enregistrement...'; saveTimer = setTimeout(doSave, 400); }
+}
+
+/* =====================================================================
+   4. MODÈLE
+   ===================================================================== */
+let currentId = null, selectedId = null;
+const cur = () => store.analyses.find(a => a.id === currentId) || null;
+const getNode = (id, an = cur()) => an ? an.nodes.find(n => n.id === id) || null : null;
+const kindOf = t => (TYPE[t] || TYPE.contributive).kind;
+const rootOf = an => an.nodes.find(n => !n.parentId);
+const familles = () => store.settings.classification === '5M' ? FAMILLES_5M : FAMILLES_8M;
+
+function mkNode(p = {}) {
+  return Object.assign({ id: uid(), parentId: null, order: 0, type: 'contributive', label: '', description: '', preuve: '', famille: '',
+    statut: '', responsable: '', echeance: '', efficacite: '', reference: '', auteur: (store && store.settings.auteur) || '',
+    createdAt: nowIso(), dx: 0, dy: 0, collapsed: false }, p);
+}
+function childrenMap(an) {
+  const m = new Map();
+  for (const n of an.nodes) { if (!n.parentId) continue; if (!m.has(n.parentId)) m.set(n.parentId, []); m.get(n.parentId).push(n); }
+  for (const l of m.values()) l.sort((a, b) => (a.order - b.order) || String(a.createdAt).localeCompare(String(b.createdAt)));
+  return m;
+}
+function descendants(an, id) {
+  const kids = childrenMap(an), out = new Set(), st = [id];
+  while (st.length) { const x = st.pop(); for (const c of kids.get(x) || []) { out.add(c.id); st.push(c.id); } }
+  return out;
+}
+function depthOf(an, n) { let d = 0, p = n; while (p && p.parentId) { p = getNode(p.parentId, an); d++; } return d; }
+function nextNumero() {
+  const y = new Date().getFullYear(), pre = (store.settings.prefixe || 'AC').trim();
+  const re = new RegExp('^' + pre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-' + y + '-(\\d+)$');
+  let max = 0; store.analyses.forEach(a => { const m = re.exec(a.numero || ''); if (m) max = Math.max(max, +m[1]); });
+  return `${pre}-${y}-${String(max + 1).padStart(3, '0')}`;
+}
+/* Numérotation hiérarchique : E pour l'événement, C1, C1.2... pour les causes, A1, A2... pour les actions */
+function numbering(an) {
+  const map = new Map(), kids = childrenMap(an), root = rootOf(an); if (!root) return map;
+  map.set(root.id, 'E'); let a = 0;
+  (function walk(n, prefix) {
+    let i = 0;
+    for (const c of kids.get(n.id) || []) {
+      if (kindOf(c.type) === 'action') { map.set(c.id, 'A' + (++a)); walk(c, prefix); }
+      else { i++; const num = prefix ? prefix + '.' + i : String(i); map.set(c.id, 'C' + num); walk(c, num); }
+    }
+  })(root, '');
+  return map;
+}
+function actionStatus(n) {
+  if (n.statut === 'Clôturée') return 'Clôturée';
+  if (n.echeance && n.echeance < isoLocal()) return 'En retard';
+  return n.statut || 'Ouverte';
+}
+function newAnalysis() {
+  const s = store.settings, root = mkNode({ type: 'evenement', label: 'Fait observé à décrire' });
+  return normalizeAnalysis({ id: uid(), numero: nextNumero(), titre: 'Nouvelle analyse', date: isoLocal(), site: s.site || '',
+    auteur: s.auteur || '', orientation: s.orientation || 'droite', nodes: [root], versions: [], createdAt: nowIso(), updatedAt: nowIso() });
+}
+function cloneAnalysis(src, asTemplate) {
+  const an = deep(src), map = new Map();
+  an.nodes.forEach(n => map.set(n.id, uid()));
+  an.nodes.forEach(n => { n.id = map.get(n.id); n.parentId = n.parentId ? map.get(n.parentId) : null; n.createdAt = nowIso(); });
+  an.id = uid(); an.numero = nextNumero(); an.versions = []; an.createdAt = an.updatedAt = nowIso(); an.statut = 'En cours'; an.modele = false;
+  if (asTemplate) {
+    Object.assign(an, { titre: 'Nouvelle analyse (modèle ' + src.numero + ')', description: '', consequences: '', refRI: '', refFNC: '', refCAPA: '', refAutre: '',
+      date: isoLocal(), validateur: '', auteur: store.settings.auteur || '', gravite: '' });
+    an.nodes.forEach(n => {
+      n.preuve = ''; n.auteur = store.settings.auteur || '';
+      if (kindOf(n.type) === 'action') Object.assign(n, { statut: 'Ouverte', echeance: '', efficacite: '', responsable: '', reference: '' });
+      else if (kindOf(n.type) === 'cause') n.statut = 'À vérifier';
+    });
+  } else an.titre = 'Copie de ' + src.titre;
+  return an;
+}
+function touch(an = cur()) { if (an) an.updatedAt = nowIso(); persist(); updateHeader(); }
+
+/* Annuler / rétablir (arbre de l'analyse ouverte) */
+const hist = { undo: [], redo: [] };
+function pushUndo() {
+  const an = cur(); if (!an) return;
+  hist.undo.push(JSON.stringify(an.nodes)); if (hist.undo.length > 80) hist.undo.shift(); hist.redo = [];
+}
+function mutate(fn) { pushUndo(); fn(); touch(); }
+function undoRedo(redo) {
+  const an = cur(); if (!an) return;
+  const from = redo ? hist.redo : hist.undo, to = redo ? hist.undo : hist.redo;
+  if (!from.length) return;
+  to.push(JSON.stringify(an.nodes)); an.nodes = JSON.parse(from.pop());
+  if (!getNode(selectedId)) selectedId = rootOf(an)?.id || null;
+  touch(); renderTree(); buildInspector();
+}
+
+/* =====================================================================
+   5. GÉOMÉTRIE : disposition de l'arbre, source commune à l'écran et aux exports
+   ===================================================================== */
+const G = { W: 214, PAD: 9, TYPE_H: 14, LINE_H: 16, META_H: 14, HGAP: 58, VGAP: 14, VGAPV: 46, HGAPV: 16, MARGIN: 24,
+  FONT: '13px Arial', BFONT: 'bold 13px Arial', TFONT: 'bold 10.5px Arial', MFONT: '11px Arial' };
+const CTX_LIGHT = { base: '#ffffff', dark: false };
+const CTX_DARK = { base: '#1e2226', dark: true };
+
+function nodeStyle(n, ctx) {
+  const col = colorOf(n.type);
+  const solid = store.settings.style === 'plein' || n.type === 'evenement' || n.type === 'racine';
+  if (solid) { const fg = textOn(col); return { fill: col, stroke: mix(col, '#000000', 0.28), fg, sub: fg, col }; }
+  return { fill: mix(col, ctx.base, ctx.dark ? 0.8 : 0.87), stroke: col, col,
+    fg: ctx.dark ? '#e3e6ea' : '#1f2933', sub: ctx.dark ? mix(col, '#ffffff', 0.4) : mix(col, '#000000', 0.38) };
+}
+function metaOf(n, an) {
+  const k = kindOf(n.type);
+  if (k === 'event') { const p = [fmtDate(an.date), an.site].filter(Boolean).join(', '); return p ? [p] : []; }
+  if (k === 'action') {
+    const st = actionStatus(n);
+    const eff = n.efficacite && n.efficacite !== 'Non évaluée' ? ', ' + n.efficacite.toLowerCase() : '';
+    return ['Responsable : ' + (n.responsable || 'à définir'), 'Échéance : ' + (n.echeance ? fmtDate(n.echeance) : 'à définir') + ', ' + st.toLowerCase() + eff];
+  }
+  if (n.statut === 'Écartée') return ['Hypothèse écartée'];
+  return [];
+}
+function buildGeometry(an, opt = {}) {
+  const ctx = opt.ctx || CTX_LIGHT, orient = opt.orient || an.orientation || 'droite';
+  const kids = childrenMap(an), root = rootOf(an), num = numbering(an);
+  const info = new Map(), order = [];
+  if (!root) return { nodes: [], edges: [], w: 0, h: 0, orient };
+  (function walk(n, depth) {
+    const t = TYPE[n.type] || TYPE.contributive, bold = n.type === 'evenement' || n.type === 'racine';
+    const nb = num.get(n.id);
+    const typeLines = wrap((nb && nb !== 'E' ? nb + '   ' : '') + t.label + (n.famille ? ' (' + n.famille + ')' : ''), G.TFONT, G.W - 2 * G.PAD);
+    const lines = wrap(n.label || '(sans libellé)', bold ? G.BFONT : G.FONT, G.W - 2 * G.PAD);
+    const meta = metaOf(n, an).flatMap(m => wrap(m, G.MFONT, G.W - 2 * G.PAD));
+    const h = G.PAD + typeLines.length * G.TYPE_H + 2 + lines.length * G.LINE_H + (meta.length ? 3 + meta.length * G.META_H : 0) + G.PAD - 2;
+    const ch = kids.get(n.id) || [];
+    const hidden = !opt.expandAll && n.collapsed && ch.length > 0;
+    const I = { n, id: n.id, depth, w: G.W, h, x: 0, y: 0, kids: [], typeLines, lines, meta, bold, num: nb,
+      style: nodeStyle(n, ctx), hasKids: ch.length > 0, collapsed: hidden, hiddenCount: hidden ? descendants(an, n.id).size : 0,
+      dashed: n.statut === 'Écartée', dim: n.statut === 'Écartée' };
+    info.set(n.id, I); order.push(I);
+    if (!hidden) for (const c of ch) { I.kids.push(c.id); walk(c, depth + 1); }
+  })(root, 0);
+
+  const span = new Map();
+  if (orient === 'bas') {
+    const rowH = []; order.forEach(I => rowH[I.depth] = Math.max(rowH[I.depth] || 0, I.h));
+    const rowY = []; let acc = 0; rowH.forEach((h, d) => { rowY[d] = acc; acc += h + G.VGAPV; });
+    const sp = id => { const I = info.get(id); let s = 0; I.kids.forEach((k, i) => s += sp(k) + (i ? G.HGAPV : 0)); I.ks = s; const v = Math.max(I.w, s); span.set(id, v); return v; };
+    sp(root.id);
+    (function place(id, left) { const I = info.get(id), s = span.get(id); I.y = rowY[I.depth]; I.x = left + s / 2 - I.w / 2;
+      let c = left + (s - I.ks) / 2; for (const k of I.kids) { place(k, c); c += span.get(k) + G.HGAPV; } })(root.id, 0);
+  } else {
+    const sp = id => { const I = info.get(id); let s = 0; I.kids.forEach((k, i) => s += sp(k) + (i ? G.VGAP : 0)); I.ks = s; const v = Math.max(I.h, s); span.set(id, v); return v; };
+    sp(root.id);
+    (function place(id, top) { const I = info.get(id), s = span.get(id); I.x = I.depth * (G.W + G.HGAP); I.y = top + s / 2 - I.h / 2;
+      let c = top + (s - I.ks) / 2; for (const k of I.kids) { place(k, c); c += span.get(k) + G.VGAP; } })(root.id, 0);
+    if (orient === 'gauche') { const maxX = Math.max(...order.map(I => I.x + I.w)); order.forEach(I => I.x = maxX - I.x - I.w); }
+  }
+  /* Déplacements manuels : le décalage d'un nœud s'applique à toute sa branche */
+  (function off(id, ox, oy) { const I = info.get(id), nx = ox + (I.n.dx || 0), ny = oy + (I.n.dy || 0); I.x += nx; I.y += ny; for (const k of I.kids) off(k, nx, ny); })(root.id, 0, 0);
+
+  const minX = Math.min(...order.map(I => I.x)), minY = Math.min(...order.map(I => I.y));
+  order.forEach(I => { I.x = Math.round(I.x - minX + G.MARGIN); I.y = Math.round(I.y - minY + G.MARGIN); });
+  const edges = [];
+  order.forEach(P => P.kids.forEach(k => { const C = info.get(k); edges.push({ from: P.id, to: C.id, pts: edgePts(P, C, orient) }); }));
+  const w = Math.max(...order.map(I => I.x + I.w)) + G.MARGIN, h = Math.max(...order.map(I => I.y + I.h)) + G.MARGIN;
+  return { nodes: order, edges, w, h, orient, info };
+}
+function edgePts(P, C, orient) {
+  if (orient === 'bas') {
+    const x1 = P.x + P.w / 2, y1 = P.y + P.h, x2 = C.x + C.w / 2, y2 = C.y, my = Math.round((y1 + y2) / 2);
+    return [[x1, y1], [x1, my], [x2, my], [x2, y2]];
+  }
+  const right = (C.x + C.w / 2) >= (P.x + P.w / 2);
+  const x1 = right ? P.x + P.w : P.x, y1 = P.y + P.h / 2, x2 = right ? C.x : C.x + C.w, y2 = C.y + C.h / 2, mx = Math.round((x1 + x2) / 2);
+  return [[x1, y1], [mx, y1], [mx, y2], [x2, y2]];
+}
+
+/* Rendu SVG d'un nœud (partagé entre écran et export) */
+function nodeSVG(I, opt = {}) {
+  const s = I.style, P = G.PAD;
+  let t = `<g class="node" data-id="${I.id}"${opt.screen ? '' : ' id="noeud-' + esc(I.num || I.id) + '"'} transform="translate(${I.x},${I.y})"${I.dim ? ' opacity="0.6"' : ''}>`;
+  if (!opt.screen) t += `<title>${esc((I.num ? I.num + ' ' : '') + (I.n.label || ''))}</title>`;
+  if (opt.sel) t += `<rect class="selring" x="-4" y="-4" width="${I.w + 8}" height="${I.h + 8}" rx="8"/>`;
+  if (opt.drop) t += `<rect class="dropring" x="-5" y="-5" width="${I.w + 10}" height="${I.h + 10}" rx="9"/>`;
+  t += `<rect width="${I.w}" height="${I.h}" rx="5" fill="${s.fill}" stroke="${s.stroke}" stroke-width="${I.bold ? 1.6 : 1.2}"${I.dashed ? ' stroke-dasharray="5 3"' : ''}/>`;
+  let y = P;
+  I.typeLines.forEach(l => { y += G.TYPE_H; t += `<text x="${P}" y="${y - 3}" font-family="Arial" font-size="10.5" font-weight="bold" fill="${s.sub}">${esc(l)}</text>`; });
+  y += 2;
+  I.lines.forEach(l => { y += G.LINE_H; t += `<text x="${P}" y="${y - 4}" font-family="Arial" font-size="13"${I.bold ? ' font-weight="bold"' : ''} fill="${s.fg}">${esc(l)}</text>`; });
+  if (I.meta.length) { y += 3; I.meta.forEach(l => { y += G.META_H; t += `<text x="${P}" y="${y - 3}" font-family="Arial" font-size="11" fill="${s.fg}" opacity="0.85">${esc(l)}</text>`; }); }
+  if (opt.screen && I.hasKids) {
+    const o = opt.orient; const cx = o === 'bas' ? I.w / 2 : (o === 'gauche' ? 0 : I.w), cy = o === 'bas' ? I.h : I.h / 2;
+    t += `<g class="tog" data-toggle="${I.id}" transform="translate(${cx},${cy})"><circle r="${I.collapsed ? 10 : 7}"/>`;
+    t += I.collapsed ? `<text text-anchor="middle" y="3.5">${I.hiddenCount}</text>` : `<line x1="-3.5" y1="0" x2="3.5" y2="0"/>`;
+    t += `</g>`;
+  }
+  return t + '</g>';
+}
+
+/* =====================================================================
+   6. ÉDITEUR : rendu écran et interactions
+   ===================================================================== */
+let geo = null, viewT = { x: 40, y: 40, k: 1 }, dropTarget = null, renderQueued = false, undoArmed = false, inspTab = 'node';
+const svg = $('#svg'), vp = $('#viewport');
+const isDark = () => document.documentElement.dataset.theme === 'dark';
+
+function renderTree() {
+  const an = cur();
+  $('#empty-editor').hidden = !!an;
+  if (!an) { vp.innerHTML = ''; geo = null; return; }
+  geo = buildGeometry(an, { ctx: isDark() ? CTX_DARK : CTX_LIGHT });
+  let s = '';
+  for (const e of geo.edges) s += `<path class="edge" d="M${e.pts.map(p => p.join(' ')).join(' L')}"/>`;
+  for (const I of geo.nodes) s += nodeSVG(I, { screen: true, orient: geo.orient, sel: I.id === selectedId, drop: I.id === dropTarget });
+  vp.innerHTML = s;
+  applyView();
+}
+function scheduleRender() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; renderTree(); }); }
+function applyView() { vp.setAttribute('transform', `translate(${viewT.x},${viewT.y}) scale(${viewT.k})`); $('#zoomval').textContent = Math.round(viewT.k * 100) + ' %'; }
+function fitView() {
+  if (!geo || !geo.nodes.length) return;
+  const r = svg.getBoundingClientRect(); if (r.width < 50) return;
+  const k = clamp(Math.min((r.width - 40) / geo.w, (r.height - 40) / geo.h), 0.2, 1.25);
+  viewT = { k, x: (r.width - geo.w * k) / 2, y: (r.height - geo.h * k) / 2 }; applyView();
+}
+function zoomAt(f, cx, cy) {
+  const r = svg.getBoundingClientRect(); if (cx == null) { cx = r.width / 2; cy = r.height / 2; }
+  const k2 = clamp(viewT.k * f, 0.15, 3); viewT.x = cx - (cx - viewT.x) * k2 / viewT.k; viewT.y = cy - (cy - viewT.y) * k2 / viewT.k; viewT.k = k2; applyView();
+}
+function toWorld(e) { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - viewT.x) / viewT.k, (e.clientY - r.top - viewT.y) / viewT.k]; }
+function select(id, opts = {}) {
+  selectedId = id; if (opts.tab) inspTab = opts.tab; else if (id && inspTab !== 'node' && opts.toNode) inspTab = 'node';
+  renderTree(); buildInspector();
+}
+function ensureVisible(id) {
+  if (!geo) return; const I = geo.info.get(id); if (!I) return; const r = svg.getBoundingClientRect();
+  const sx = I.x * viewT.k + viewT.x, sy = I.y * viewT.k + viewT.y;
+  if (sx < 10 || sy < 10 || sx + I.w * viewT.k > r.width - 10 || sy + I.h * viewT.k > r.height - 10) {
+    viewT.x = r.width / 2 - (I.x + I.w / 2) * viewT.k; viewT.y = r.height / 2 - (I.y + I.h / 2) * viewT.k; applyView();
+  }
+}
+
+let drag = null, pan = null;
+svg.addEventListener('pointerdown', e => {
+  if (e.button !== 0) return;
+  const an = cur(); if (!an) return;
+  closeMenus();
+  const tog = e.target.closest('[data-toggle]');
+  if (tog) { const n = getNode(tog.dataset.toggle); if (n) { mutate(() => n.collapsed = !n.collapsed); renderTree(); buildInspector(); } return; }
+  const g = e.target.closest('.node');
+  if (g) {
+    const n = getNode(g.dataset.id); if (!n) return;
+    if (selectedId !== n.id) { selectedId = n.id; inspTab = 'node'; renderTree(); buildInspector(); }
+    drag = { id: n.id, sx: e.clientX, sy: e.clientY, ox: n.dx || 0, oy: n.dy || 0, moved: false, pushed: false, excl: new Set([n.id, ...descendants(an, n.id)]) };
+  } else { pan = { sx: e.clientX, sy: e.clientY, vx: viewT.x, vy: viewT.y, moved: false }; svg.classList.add('panning'); }
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e => {
+  if (drag) {
+    const dx = (e.clientX - drag.sx) / viewT.k, dy = (e.clientY - drag.sy) / viewT.k;
+    if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
+    const n = getNode(drag.id); if (!n) return;
+    if (!drag.pushed) { pushUndo(); drag.pushed = true; }
+    drag.moved = true; n.dx = drag.ox + dx; n.dy = drag.oy + dy;
+    const [wx, wy] = toWorld(e); let tgt = null;
+    if (n.parentId) for (const I of geo.nodes) {
+      if (drag.excl.has(I.id) || kindOf(I.n.type) === 'action') continue;
+      if (wx >= I.x && wx <= I.x + I.w && wy >= I.y && wy <= I.y + I.h) { tgt = I.id; break; }
+    }
+    dropTarget = (tgt && tgt !== n.parentId) ? tgt : null;
+    scheduleRender();
+  } else if (pan) {
+    if (Math.hypot(e.clientX - pan.sx, e.clientY - pan.sy) > 3) pan.moved = true;
+    viewT.x = pan.vx + e.clientX - pan.sx; viewT.y = pan.vy + e.clientY - pan.sy; applyView();
+  }
+});
+function endPointer() {
+  if (drag) {
+    const an = cur(), n = getNode(drag.id);
+    if (drag.moved && n) {
+      if (dropTarget) {
+        const kids = childrenMap(an).get(dropTarget) || [];
+        n.parentId = dropTarget; n.dx = 0; n.dy = 0; n.order = kids.length ? Math.max(...kids.map(k => k.order)) + 1 : 0;
+        const t = getNode(dropTarget); if (t) t.collapsed = false;
+        toast('Élément rattaché à « ' + (t?.label || '').slice(0, 60) + ' »');
+      }
+      touch(); dropTarget = null; renderTree(); buildInspector();
+    }
+    drag = null;
+  }
+  if (pan) { if (!pan.moved && selectedId) { selectedId = null; renderTree(); buildInspector(); } pan = null; svg.classList.remove('panning'); }
+}
+svg.addEventListener('pointerup', endPointer);
+svg.addEventListener('pointercancel', endPointer);
+svg.addEventListener('wheel', e => { e.preventDefault(); const r = svg.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+svg.addEventListener('dblclick', e => { const g = e.target.closest('.node'); if (g) { select(g.dataset.id, { tab: 'node' }); focusLabel(true); } });
+
+function focusLabel(selectAll) { setTimeout(() => { const t = $('#inspector [data-f="label"]'); if (t) { t.focus(); if (selectAll) t.select(); } }, 0); }
+
+function addNode(kind) {
+  const an = cur(); if (!an) return;
+  const root = rootOf(an); let sel = getNode(selectedId) || root;
+  let parent = kind === 'sibling' ? (sel.parentId ? getNode(sel.parentId) : sel) : sel;
+  if (kindOf(parent.type) === 'action') parent = getNode(parent.parentId) || root;
+  let type, label;
+  if (kind === 'racine') { type = 'racine'; label = 'Cause racine à formuler'; }
+  else if (kind === 'corrective' || kind === 'preventive') { type = kind; label = 'Action à définir'; }
+  else if (kind === 'sibling' && sel !== root && kindOf(sel.type) === 'cause') { type = sel.type; label = 'Nouvelle cause'; }
+  else { type = parent === root ? 'immediate' : 'contributive'; label = 'Nouvelle cause'; }
+  const sibs = childrenMap(an).get(parent.id) || [];
+  const n = mkNode({ parentId: parent.id, type, label, order: sibs.length ? Math.max(...sibs.map(s => s.order)) + 1 : 0,
+    statut: kindOf(type) === 'action' ? 'Ouverte' : 'À vérifier', efficacite: kindOf(type) === 'action' ? 'Non évaluée' : '' });
+  mutate(() => { an.nodes.push(n); parent.collapsed = false; });
+  selectedId = n.id; inspTab = 'node'; renderTree(); buildInspector(); ensureVisible(n.id); focusLabel(true);
+}
+function deleteNode() {
+  const an = cur(), n = getNode(selectedId); if (!an || !n) return;
+  if (!n.parentId) { toast("L'événement ne peut pas être supprimé : il porte l'analyse."); return; }
+  const d = descendants(an, n.id);
+  if (d.size && !confirm(`Supprimer cet élément et les ${d.size} élément(s) rattaché(s) ?`)) return;
+  mutate(() => { an.nodes = an.nodes.filter(x => x.id !== n.id && !d.has(x.id)); });
+  selectedId = n.parentId; renderTree(); buildInspector();
+}
+function moveSibling(dir) {
+  const an = cur(), n = getNode(selectedId); if (!n || !n.parentId) return;
+  const sibs = childrenMap(an).get(n.parentId); const i = sibs.indexOf(n), j = i + dir;
+  if (j < 0 || j >= sibs.length) return;
+  mutate(() => { sibs.forEach((s, k) => s.order = k); const o = sibs[j].order; sibs[j].order = n.order; n.order = o; n.dx = n.dy = 0; sibs[j].dx = sibs[j].dy = 0; });
+  renderTree(); buildInspector();
+}
+
+/* ---------- Inspecteur ---------- */
+const opt = (v, l, cur) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l ?? v)}</option>`;
+const fld = (label, html, cls = '') => `<label class="fld ${cls}"><span>${label}</span>${html}</label>`;
+function buildInspector() {
+  const el = $('#inspector'), an = cur();
+  if (!an) { el.innerHTML = ''; return; }
+  const chk = checkAnalysis(an);
+  const nIssues = chk.issues.filter(i => i.level !== 'info').length;
+  let h = `<div class="tabs">
+    <button data-tab="node" class="${inspTab === 'node' ? 'active' : ''}" type="button">Élément</button>
+    <button data-tab="dossier" class="${inspTab === 'dossier' ? 'active' : ''}" type="button">Dossier</button>
+    <button data-tab="check" class="${inspTab === 'check' ? 'active' : ''}" type="button">Contrôle${nIssues ? `<span class="cnt">${nIssues}</span>` : ''}</button>
+    <button data-tab="versions" class="${inspTab === 'versions' ? 'active' : ''}" type="button">Versions${an.versions.length ? `<span class="cnt">${an.versions.length}</span>` : ''}</button>
+  </div><div class="pane">`;
+  if (inspTab === 'node') h += paneNode(an);
+  else if (inspTab === 'dossier') h += paneDossier(an);
+  else if (inspTab === 'check') h += paneCheck(an, chk);
+  else h += paneVersions(an);
+  el.innerHTML = h + '</div>';
+  if (inspTab === 'node') showSuggestions();
+}
+function paneNode(an) {
+  const n = getNode(selectedId);
+  if (!n) return `<p class="muted">Sélectionner un élément de l'arbre pour le modifier.</p>
+    <div class="questions"><b>Démarche conseillée</b><ol>
+    <li>Décrire le fait observé dans l'événement (fait vérifiable, sans interprétation).</li>
+    <li>Ajouter les causes immédiates, puis remonter avec « Pourquoi ? » jusqu'aux causes racines.</li>
+    <li>Étayer chaque cause par une preuve ou l'écarter.</li>
+    <li>Associer au moins une action à chaque cause racine.</li></ol></div>`;
+  const k = kindOf(n.type), num = numbering(an).get(n.id), isRoot = !n.parentId, depth = depthOf(an, n);
+  const types = isRoot ? [TYPE.evenement] : TYPES.filter(t => t.kind !== 'event');
+  let h = `<div class="typebar"><span class="swatch" style="background:${colorOf(n.type)}"></span><b>${esc(num || '')}</b><span class="muted">${esc(TYPE[n.type]?.label || '')}${k === 'cause' ? ', niveau de pourquoi ' + depth : ''}</span></div>`;
+  if (!isRoot) h += fld('Type', `<select data-f="type">${types.map(t => opt(t.id, t.label, n.type)).join('')}</select>`);
+  h += fld(isRoot ? 'Fait observé' : (k === 'action' ? 'Action' : 'Cause'), `<textarea data-f="label" rows="3">${esc(n.label)}</textarea>`);
+  h += `<div id="sugg"></div>`;
+  if (!isRoot) {
+    const libs = store.library.filter(l => kindOf(l.type) === k);
+    if (libs.length) {
+      const groups = TYPES.filter(t => libs.some(l => l.type === t.id));
+      h += fld('Choisir dans la bibliothèque', `<select data-libpick><option value="">Sélectionner une entrée</option>${groups.map(t => `<optgroup label="${esc(t.label)}">${libs.filter(l => l.type === t.id).sort((a, b) => a.label.localeCompare(b.label, 'fr')).map(l => opt(l.id, l.label)).join('')}</optgroup>`).join('')}</select>`);
+    }
+  }
+  if (k !== 'event') {
+    h += `<div class="grid2">` + fld('Famille ' + store.settings.classification, `<select data-f="famille">${['', ...familles()].concat(n.famille && !familles().includes(n.famille) ? [n.famille] : []).map(f => opt(f, f || 'Non renseignée', n.famille)).join('')}</select>`);
+    h += fld('Statut', `<select data-f="statut">${(k === 'action' ? STATUTS_ACTION : STATUTS_CAUSE).map(s => opt(s, s, n.statut)).join('')}</select>`) + `</div>`;
+  }
+  if (k === 'action') {
+    h += `<div class="grid2">` + fld('Responsable', `<input type="text" data-f="responsable" value="${esc(n.responsable)}">`) +
+      fld('Échéance', `<input type="date" data-f="echeance" value="${esc(n.echeance)}">`) + `</div>`;
+    h += `<div class="grid2">` + fld('Efficacité', `<select data-f="efficacite">${EFFICACITES.map(s => opt(s, s, n.efficacite || 'Non évaluée')).join('')}</select>`) +
+      fld('Référence (CAPA...)', `<input type="text" data-f="reference" value="${esc(n.reference)}">`) + `</div>`;
+    if (actionStatus(n) === 'En retard') h += `<p class="small" style="color:var(--danger);margin:-4px 0 10px">Échéance dépassée : l'action apparaît « En retard ».</p>`;
+  } else {
+    h += fld(isRoot ? 'Éléments factuels constatés' : 'Preuve, élément factuel', `<textarea data-f="preuve" rows="2" placeholder="Constat, enregistrement, entretien, mesure...">${esc(n.preuve)}</textarea>`);
+    if (!isRoot) h += fld('Référence associée', `<input type="text" data-f="reference" value="${esc(n.reference)}">`);
+  }
+  h += fld('Commentaire', `<textarea data-f="description" rows="2">${esc(n.description)}</textarea>`);
+  h += `<div class="btnrow">`;
+  if (k !== 'action') h += `<button class="btn sm" data-act="add-child" type="button">Ajouter une cause</button><button class="btn sm" data-act="add-corrective" type="button">Ajouter une action</button>`;
+  if (!isRoot) h += `<button class="btn sm" data-act="up" type="button">Monter</button><button class="btn sm" data-act="down" type="button">Descendre</button>`;
+  if (k !== 'event') h += `<button class="btn sm" data-act="to-lib" type="button">Ajouter à la bibliothèque</button>`;
+  if (!isRoot) h += `<button class="btn sm danger" data-act="delete" type="button">Supprimer</button>`;
+  h += `</div>`;
+  const q = isRoot ? QUESTIONS.event : k === 'action' ? QUESTIONS.action : n.type === 'racine' ? QUESTIONS.racine : n.type === 'immediate' ? QUESTIONS.immediate : QUESTIONS.cause;
+  h += `<div class="questions"><b>Questions d'investigation</b><ol>${q.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+  h += `<div class="meta-ro">Créé le ${fmtDateTime(n.createdAt)}${n.auteur ? ' par ' + esc(n.auteur) : ''}</div>`;
+  return h;
+}
+function paneDossier(an) {
+  const f = (k, l, type = 'text') => fld(l, `<input type="${type}" data-a="${k}" value="${esc(an[k])}">`);
+  return `<div class="grid2">${f('numero', 'Numéro')}${fld('Statut', `<select data-a="statut">${STATUTS_ANALYSE.map(s => opt(s, s, an.statut)).join('')}</select>`)}</div>
+    ${fld('Titre', `<input type="text" data-a="titre" value="${esc(an.titre)}">`)}
+    <div class="grid2">${f('date', "Date de l'événement", 'date')}${fld('Gravité', `<select data-a="gravite">${GRAVITES.map(s => opt(s, s || 'Non renseignée', an.gravite)).join('')}</select>`)}</div>
+    <div class="grid2">${f('site', 'Site')}${f('processus', 'Processus concerné')}</div>
+    ${fld('Description du problème', `<textarea data-a="description" rows="4">${esc(an.description)}</textarea>`)}
+    ${fld('Conséquences observées', `<textarea data-a="consequences" rows="2">${esc(an.consequences)}</textarea>`)}
+    <div class="grid2">${f('refRI', 'Référence RI')}${f('refFNC', 'Référence FNC')}</div>
+    <div class="grid2">${f('refCAPA', 'Référence CAPA')}${f('refAutre', 'Autre (audit, client...)')}</div>
+    <div class="grid2">${f('auteur', 'Auteur')}${f('validateur', 'Validateur')}</div>
+    <label class="chk fld"><input type="checkbox" data-a="modele"${an.modele ? ' checked' : ''}> Proposer cette analyse comme modèle réutilisable</label>
+    <div class="meta-ro">Créée le ${fmtDateTime(an.createdAt)}, modifiée le ${fmtDateTime(an.updatedAt)}</div>`;
+}
+function paneCheck(an, chk) {
+  const sc = (l, v) => `<div class="score"><div class="lbl"><span>${l}</span><b>${v} %</b></div><div class="meter"><span style="width:${v}%"></span></div></div>`;
+  let h = `<p class="small muted" style="margin-top:0">Évaluation indicative de la maturité de l'analyse, recalculée à chaque modification.</p>`;
+  h += sc('Complétude', chk.scores.completude) + sc('Robustesse', chk.scores.robustesse) + sc('Traçabilité', chk.scores.tracabilite);
+  h += `<h3>Points à traiter</h3>`;
+  if (!chk.issues.length) h += `<div class="issue info">Aucun point bloquant détecté.</div>`;
+  chk.issues.forEach(i => h += `<button class="issue ${i.level}" type="button" ${i.nodeId ? `data-goto-node="${i.nodeId}"` : i.tab ? `data-goto-tab="${i.tab}"` : ''}>${esc(i.text)}</button>`);
+  return h;
+}
+function paneVersions(an) {
+  let h = `<p class="small muted" style="margin-top:0">Une version fige l'état complet de l'analyse (dossier et arbre). Les modifications courantes sont enregistrées automatiquement.</p>
+    ${fld('Commentaire de la nouvelle version', `<textarea id="ver-comment" rows="2" placeholder="Ex. : validation en revue CAPA du 14/10"></textarea>`)}
+    <div class="btnrow"><button class="btn primary sm" data-act="version-save" type="button">Enregistrer la version ${an.versions.length + 1}</button></div>`;
+  [...an.versions].reverse().forEach(v => {
+    h += `<div class="vitem"><div class="vh"><span>Version ${v.n}</span><span class="muted small">${fmtDateTime(v.date)}</span></div>
+      <div class="small">${esc(v.commentaire || 'Sans commentaire')}</div><div class="small muted">${esc(v.auteur || '')}</div>
+      <div class="btnrow" style="margin-bottom:0"><button class="btn sm" data-restore="${v.n}" type="button">Restaurer</button></div></div>`;
+  });
+  return h;
+}
+function showSuggestions() {
+  const box = $('#sugg'), n = getNode(selectedId), an = cur(); if (!box || !n || !n.parentId) { if (box) box.innerHTML = ''; return; }
+  const q = norm(n.label); if (q.length < 4) { box.innerHTML = ''; return; }
+  const k = kindOf(n.type), seen = new Set([q]), cands = [];
+  store.library.filter(l => kindOf(l.type) === k).forEach(l => cands.push({ label: l.label, src: 'bibliothèque', lib: l }));
+  store.analyses.forEach(a => { if (a.id === an.id) return; a.nodes.forEach(x => { if (x.parentId && kindOf(x.type) === k && x.label) cands.push({ label: x.label, src: a.numero, node: x }); }); });
+  const scored = [];
+  for (const c of cands) { const cn = norm(c.label); if (seen.has(cn)) continue; const s = dice(q, cn); if (s >= 0.42) { seen.add(cn); scored.push([s, c]); } }
+  scored.sort((a, b) => b[0] - a[0]);
+  const top = scored.slice(0, 5);
+  box.innerHTML = top.length ? `<div class="sugg"><div class="h">Formulations proches déjà utilisées</div>${top.map(([s, c], i) =>
+    `<button type="button" data-sugg="${i}">${esc(c.label)} <em>(${esc(c.src)}, ${Math.round(s * 100)} %)</em></button>`).join('')}</div>` : '';
+  box._cands = top.map(t => t[1]);
+}
+
+/* Événements de l'inspecteur */
+const insp = $('#inspector');
+insp.addEventListener('focusin', e => { if (e.target.matches('[data-f]')) undoArmed = true; });
+insp.addEventListener('input', e => {
+  const t = e.target, an = cur(); if (!an) return;
+  if (t.dataset.f) {
+    const n = getNode(selectedId); if (!n) return;
+    if (undoArmed) { pushUndo(); undoArmed = false; }
+    const f = t.dataset.f; n[f] = t.value;
+    if (f === 'type') {
+      const k = kindOf(n.type);
+      if (k === 'action' && !STATUTS_ACTION.includes(n.statut)) { n.statut = 'Ouverte'; n.efficacite = n.efficacite || 'Non évaluée'; }
+      if (k === 'cause' && !STATUTS_CAUSE.includes(n.statut)) n.statut = 'À vérifier';
+      if (k === 'action' && !getNode(n.parentId)) {}
+      touch(); renderTree(); buildInspector(); return;
+    }
+    touch(); scheduleRender();
+    if (f === 'label') showSuggestions();
+    if (['statut', 'echeance', 'famille'].includes(f)) refreshTabsCount();
+  } else if (t.dataset.a) {
+    const k = t.dataset.a; an[k] = t.type === 'checkbox' ? t.checked : t.value;
+    touch(); if (['date', 'site'].includes(k)) scheduleRender();
+  } else if (t.matches('[data-libpick]')) {
+    const l = store.library.find(x => x.id === t.value), n = getNode(selectedId); if (!l || !n) return;
+    mutate(() => { n.label = l.label; n.type = l.type; if (l.famille) n.famille = l.famille; });
+    renderTree(); buildInspector();
+  }
+});
+function refreshTabsCount() { const an = cur(); if (!an) return; const c = checkAnalysis(an).issues.filter(i => i.level !== 'info').length; const b = $('#inspector [data-tab="check"]'); if (b) b.innerHTML = 'Contrôle' + (c ? `<span class="cnt">${c}</span>` : ''); }
+insp.addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  const an = cur();
+  if (t.dataset.tab) { inspTab = t.dataset.tab; buildInspector(); return; }
+  if (t.dataset.sugg !== undefined) {
+    const c = $('#sugg')._cands[+t.dataset.sugg], n = getNode(selectedId); if (!c || !n) return;
+    mutate(() => { n.label = c.label; if (c.lib) { n.type = c.lib.type; if (c.lib.famille) n.famille = c.lib.famille; } else if (c.node && c.node.famille && !n.famille) n.famille = c.node.famille; });
+    renderTree(); buildInspector(); return;
+  }
+  if (t.dataset.gotoNode) { select(t.dataset.gotoNode, { tab: 'node' }); ensureVisible(t.dataset.gotoNode); return; }
+  if (t.dataset.gotoTab) { inspTab = t.dataset.gotoTab; buildInspector(); return; }
+  if (t.dataset.restore) { restoreVersion(an, +t.dataset.restore); return; }
+  const a = t.dataset.act; if (!a) return;
+  if (a === 'up') moveSibling(-1); else if (a === 'down') moveSibling(1);
+  else if (a === 'to-lib') {
+    const n = getNode(selectedId); if (!n || !n.label.trim()) return;
+    if (store.library.some(l => norm(l.label) === norm(n.label))) { toast('Cette formulation existe déjà dans la bibliothèque.'); return; }
+    store.library.push({ id: uid(), type: n.type, famille: n.famille || '', label: n.label.trim() }); persist(); toast('Ajouté à la bibliothèque.');
+  } else if (a === 'version-save') { saveVersion(an, $('#ver-comment').value); }
+});
+
+/* Versions */
+function saveVersion(an, commentaire) {
+  const snap = deep(an); delete snap.versions;
+  an.versions.push({ n: an.versions.length + 1, date: nowIso(), auteur: store.settings.auteur || an.auteur || '', commentaire: (commentaire || '').trim(), snapshot: snap });
+  touch(an); persist(true); toast('Version ' + an.versions.length + ' enregistrée.');
+  if (cur() === an) { inspTab = 'versions'; buildInspector(); }
+}
+function restoreVersion(an, n) {
+  const v = an.versions.find(x => x.n === n); if (!v) return;
+  if (!confirm(`Restaurer la version ${n} ? L'état actuel sera d'abord enregistré comme nouvelle version.`)) return;
+  saveVersion(an, 'Sauvegarde automatique avant restauration de la version ' + n);
+  const keep = { id: an.id, versions: an.versions };
+  Object.keys(an).forEach(k => delete an[k]); Object.assign(an, deep(v.snapshot), keep); normalizeAnalysis(an);
+  hist.undo = []; hist.redo = []; selectedId = rootOf(an)?.id;
+  touch(an); renderTree(); buildInspector(); toast('Version ' + n + ' restaurée.');
+}
+
+/* Contrôle de la qualité de l'analyse */
+function checkAnalysis(an) {
+  const issues = [], kids = childrenMap(an), root = rootOf(an), num = numbering(an);
+  const causes = an.nodes.filter(n => n.parentId && kindOf(n.type) === 'cause');
+  const active = causes.filter(n => n.statut !== 'Écartée');
+  const racines = active.filter(n => n.type === 'racine');
+  const actions = an.nodes.filter(n => kindOf(n.type) === 'action');
+  const lbl = n => (num.get(n.id) || '') + ' ' + (n.label || '').slice(0, 70);
+  const hasAction = n => [...descendants(an, n.id)].some(id => kindOf(getNode(id, an)?.type) === 'action');
+  if (!an.description.trim()) issues.push({ level: 'warn', text: 'Description du problème non renseignée.', tab: 'dossier' });
+  if (!root || !root.label.trim() || root.label === 'Fait observé à décrire') issues.push({ level: 'warn', text: "Le fait observé (événement) n'est pas décrit.", nodeId: root?.id });
+  if (!active.length) issues.push({ level: 'crit', text: 'Aucune cause identifiée.' });
+  else if (!racines.length) issues.push({ level: 'crit', text: 'Aucune cause racine identifiée : poursuivre le questionnement « Pourquoi ? ».' });
+  racines.forEach(n => { if (!hasAction(n)) issues.push({ level: 'crit', text: 'Cause racine sans action associée : ' + lbl(n), nodeId: n.id }); });
+  active.forEach(n => {
+    const ck = (kids.get(n.id) || []).filter(c => kindOf(c.type) === 'cause' && c.statut !== 'Écartée');
+    if (!ck.length && n.type !== 'racine') issues.push({ level: 'warn', text: (depthOf(an, n) <= 1 ? 'Cause insuffisamment investiguée (arrêt au premier niveau) : ' : 'Branche sans cause racine : ') + lbl(n), nodeId: n.id });
+  });
+  active.forEach(n => { if (!n.preuve.trim() && n.statut !== 'Confirmée') issues.push({ level: 'warn', text: 'Cause sans élément de preuve : ' + lbl(n), nodeId: n.id }); });
+  const generic = n => { const t = norm(n.label); return t.split(' ').filter(Boolean).length < 3 || GENERIQUES.some(g => t === norm(g) || t.startsWith(norm(g) + ' ')); };
+  active.forEach(n => { if (generic(n)) issues.push({ level: 'warn', text: 'Formulation trop générique : ' + lbl(n), nodeId: n.id }); });
+  actions.forEach(n => {
+    if (!n.responsable.trim()) issues.push({ level: 'warn', text: 'Action sans responsable : ' + lbl(n), nodeId: n.id });
+    if (!n.echeance) issues.push({ level: 'warn', text: 'Action sans échéance : ' + lbl(n), nodeId: n.id });
+    else if (actionStatus(n) === 'En retard') issues.push({ level: 'crit', text: 'Action en retard : ' + lbl(n), nodeId: n.id });
+  });
+  const pct = (a, b) => b ? a / b : 0;
+  const completude = [an.description.trim(), an.consequences.trim(), an.processus.trim(), an.date, active.length, racines.length,
+    racines.length && racines.every(hasAction), actions.length && actions.every(n => n.responsable && n.echeance)].filter(Boolean).length / 8;
+  const robustesse = active.length ? 0.55 * pct(active.filter(n => n.preuve.trim() || n.statut === 'Confirmée').length, active.length)
+    + 0.25 * pct(active.filter(n => !generic(n)).length, active.length) + 0.2 * pct(racines.filter(n => depthOf(an, n) >= 2).length, racines.length || 1) : 0;
+  const tracabilite = 0.3 * !!(an.refRI || an.refFNC || an.refCAPA || an.refAutre) + 0.2 * !!(an.auteur && an.validateur)
+    + 0.3 * pct(actions.filter(n => n.responsable && n.echeance).length, actions.length || 1) * (actions.length ? 1 : 0) + 0.2 * (an.versions.length > 0);
+  const P = v => Math.round(clamp(v, 0, 1) * 100);
+  return { issues, scores: { completude: P(completude), robustesse: P(robustesse), tracabilite: P(tracabilite) } };
+}
+
+/* Barre d'outils, menus et clavier */
+$('#toolbar').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const a = b.dataset.act, an = cur();
+  if (a === 'export-menu') { toggleExportMenu(); return; }
+  if (!an && a !== 'new') return;
+  handleAct(a);
+});
+$('#empty-editor').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.act === 'new') createAnalysis(); if (b.dataset.goto) showView(b.dataset.goto); });
+function handleAct(a) {
+  const an = cur();
+  switch (a) {
+    case 'add-child': addNode('child'); break;
+    case 'add-sibling': addNode('sibling'); break;
+    case 'add-racine': addNode('racine'); break;
+    case 'add-corrective': addNode('corrective'); break;
+    case 'add-preventive': addNode('preventive'); break;
+    case 'delete': deleteNode(); break;
+    case 'undo': undoRedo(false); break;
+    case 'redo': undoRedo(true); break;
+    case 'collapse': { const n = getNode(selectedId); if (n && childrenMap(an).get(n.id)) { mutate(() => n.collapsed = !n.collapsed); renderTree(); } else toast('Sélectionner un élément qui possède une branche.'); break; }
+    case 'expand-all': mutate(() => an.nodes.forEach(n => n.collapsed = false)); renderTree(); break;
+    case 'zoom-in': zoomAt(1.2); break;
+    case 'zoom-out': zoomAt(1 / 1.2); break;
+    case 'fit': fitView(); break;
+    case 'relayout': mutate(() => an.nodes.forEach(n => { n.dx = 0; n.dy = 0; })); renderTree(); fitView(); break;
+    case 'version': inspTab = 'versions'; buildInspector(); setTimeout(() => $('#ver-comment')?.focus(), 0); break;
+  }
+}
+$('#orient').addEventListener('input', e => { const an = cur(); if (!an) return; mutate(() => { an.orientation = e.target.value; an.nodes.forEach(n => { n.dx = 0; n.dy = 0; }); }); renderTree(); fitView(); });
+function closeMenus() { $$('.menu.open').forEach(m => m.classList.remove('open')); }
+function toggleExportMenu() {
+  const m = $('#export-menu');
+  if (!m.classList.contains('open')) {
+    m.innerHTML = Object.entries(Exporters).map(([k, x]) => (x.sepBefore ? '<div class="msep"></div>' : '') + `<button type="button" data-exp="${k}">${esc(x.label)}<small>${esc(x.hint)}</small></button>`).join('');
+  }
+  m.classList.toggle('open');
+}
+$('#export-menu').addEventListener('click', e => { const b = e.target.closest('[data-exp]'); if (!b) return; closeMenus(); runExport(b.dataset.exp, cur()); });
+document.addEventListener('click', e => { if (!e.target.closest('.dropdown')) closeMenus(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeMenus(); if (!$('#modal').classList.contains('hidden')) closeModal(); }
+  if (activeView !== 'editor' || !cur() || !$('#modal').classList.contains('hidden')) return;
+  const inField = e.target.closest('input,textarea,select');
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); persist(true); toast('Analyse enregistrée dans le navigateur.'); return; }
+  if (inField) return;
+  if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undoRedo(e.shiftKey); return; }
+  if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); undoRedo(true); return; }
+  if (e.key === 'Tab') { e.preventDefault(); addNode('child'); }
+  else if (e.key === 'Enter') { e.preventDefault(); addNode('sibling'); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteNode(); }
+  else if (e.key === 'F2') { e.preventDefault(); focusLabel(false); }
+});
+
+/* =====================================================================
+   7. VUES
+   ===================================================================== */
+let activeView = 'list';
+function showView(v) {
+  activeView = v;
+  $$('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $$('main .view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
+  closeMenus();
+  if (v === 'list') renderList();
+  if (v === 'library') renderLibrary();
+  if (v === 'rex') renderRex();
+  if (v === 'settings') renderSettings();
+  if (v === 'editor') {
+    const an = cur(); $('#orient').value = an ? an.orientation : 'droite';
+    renderTree(); buildInspector(); requestAnimationFrame(() => { if (an && !openEditor._fitted) { fitView(); openEditor._fitted = true; } });
+  }
+}
+$('#nav').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) showView(b.dataset.view); });
+function openEditor(id) {
+  currentId = id; selectedId = rootOf(cur())?.id || null; inspTab = 'node'; hist.undo = []; hist.redo = [];
+  store.settings.lastId = id; persist(); updateHeader(); openEditor._fitted = false; showView('editor');
+}
+function createAnalysis(an) { an = an || newAnalysis(); store.analyses.unshift(an); persist(true); openEditor(an.id); if (!arguments[0]) { inspTab = 'dossier'; buildInspector(); } }
+function updateHeader() {
+  const an = cur();
+  $('#hdr-current').innerHTML = an ? `<b>${esc(an.numero)}</b>&nbsp;&nbsp;${esc(an.titre)}${an.versions.length ? `&nbsp;&nbsp;<span class="tag">v${an.versions.length}</span>` : ''}` : '';
+}
+function updateFoot() {
+  const kb = Math.round(Storage.size() / 1024 * 2);
+  $('#nav-foot').innerHTML = `${store.analyses.length} analyse(s) enregistrée(s) dans ce navigateur, ${kb} Ko.<br>Penser à exporter la base régulièrement (Analyses, Exporter la base).`;
+}
+
+/* ---------- Liste des analyses ---------- */
+const listState = { q: '', statut: '', annee: '', auteur: '', modeles: false, sel: new Set() };
+function renderList() {
+  const years = [...new Set(store.analyses.map(a => (a.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+  const auteurs = [...new Set(store.analyses.map(a => a.auteur).filter(Boolean))].sort();
+  $('#view-list').innerHTML = `<h2>Analyses</h2>
+    <p class="lead">Toutes les analyses sont conservées dans ce navigateur. Recherche sur le numéro, le titre, la description, les causes, les actions et l'auteur.</p>
+    <div class="filters">
+      <button class="btn primary" data-l="new" type="button">Nouvelle analyse</button>
+      <input type="search" id="l-q" placeholder="Rechercher" value="${esc(listState.q)}">
+      <select id="l-statut"><option value="">Tous statuts</option>${STATUTS_ANALYSE.map(s => opt(s, s, listState.statut)).join('')}</select>
+      <select id="l-annee"><option value="">Toutes années</option>${years.map(y => opt(y, y, listState.annee)).join('')}</select>
+      <select id="l-auteur"><option value="">Tous auteurs</option>${auteurs.map(y => opt(y, y, listState.auteur)).join('')}</select>
+      <label class="chk"><input type="checkbox" id="l-mod"${listState.modeles ? ' checked' : ''}> Modèles uniquement</label>
+      <span class="spacer"></span>
+      <button class="btn" data-l="compare" type="button">Comparer deux analyses</button>
+      <button class="btn" data-l="import" type="button">Importer (JSON)</button>
+      <div class="dropdown"><button class="btn" data-l="base-menu" type="button">Base complète</button>
+        <div class="menu" id="base-menu">
+          <button type="button" data-l="export-base">Exporter la base (JSON)<small>Sauvegarde complète : analyses, versions, bibliothèque, paramètres</small></button>
+          <button type="button" data-l="export-base-xlsx">Exporter la base (Excel)<small>Tables à plat pour Power Query, Power BI ou Microsoft Lists</small></button>
+          <div class="msep"></div>
+          <button type="button" data-l="examples">Charger trois analyses d'exemple<small>Pour découvrir l'outil et la vue REX</small></button>
+        </div></div>
+    </div>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th></th><th>Numéro</th><th>Titre</th><th>Date</th><th>Processus</th><th>Auteur</th><th>Causes racines</th><th>Actions ouvertes</th><th>Statut</th><th>Modifiée le</th><th></th></tr></thead><tbody id="l-body"></tbody></table></div>`;
+  renderListBody();
+}
+function analysisText(a) { return norm([a.numero, a.titre, a.description, a.consequences, a.auteur, a.validateur, a.processus, a.site, a.refRI, a.refFNC, a.refCAPA, a.refAutre, fmtDate(a.date), ...a.nodes.map(n => n.label + ' ' + n.responsable + ' ' + n.preuve)].join(' ')); }
+function renderListBody() {
+  const q = norm(listState.q);
+  const rows = store.analyses.filter(a => (!listState.statut || a.statut === listState.statut) && (!listState.annee || (a.date || '').startsWith(listState.annee))
+    && (!listState.auteur || a.auteur === listState.auteur) && (!listState.modeles || a.modele) && (!q || q.split(' ').every(w => analysisText(a).includes(w))))
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  const body = $('#l-body'); if (!body) return;
+  if (!rows.length) { body.innerHTML = `<tr><td colspan="11" class="muted" style="padding:18px">${store.analyses.length ? 'Aucune analyse ne correspond aux critères.' : 'Aucune analyse pour le moment. Créer une nouvelle analyse ou charger les exemples (menu Base complète).'}</td></tr>`; return; }
+  body.innerHTML = rows.map(a => {
+    const r = a.nodes.filter(n => n.type === 'racine' && n.statut !== 'Écartée').length;
+    const act = a.nodes.filter(n => kindOf(n.type) === 'action'), open = act.filter(n => actionStatus(n) !== 'Clôturée'), late = act.filter(n => actionStatus(n) === 'En retard');
+    const st = a.statut === 'Clôturée' ? 'ok' : a.statut === 'Archivée' ? '' : 'warn';
+    return `<tr class="click" data-open="${a.id}"><td><input type="checkbox" data-sel="${a.id}"${listState.sel.has(a.id) ? ' checked' : ''} title="Sélectionner pour comparer"></td>
+      <td><b>${esc(a.numero)}</b>${a.modele ? ' <span class="tag">modèle</span>' : ''}</td><td>${esc(a.titre)}</td><td>${fmtDate(a.date)}</td><td>${esc(a.processus)}</td><td>${esc(a.auteur)}</td>
+      <td class="num">${r}</td><td class="num">${open.length}${late.length ? ` <span class="tag crit">${late.length} en retard</span>` : ''}</td>
+      <td><span class="tag ${st}">${esc(a.statut)}</span></td><td>${fmtDateTime(a.updatedAt)}</td>
+      <td style="white-space:nowrap"><button class="btn sm" data-l="clone" data-id="${a.id}" type="button">Dupliquer</button>
+      <button class="btn sm" data-l="template" data-id="${a.id}" type="button" title="Créer une nouvelle analyse à partir de cet arbre, sans les données du dossier">Réutiliser l'arbre</button>
+      <button class="btn sm" data-l="json" data-id="${a.id}" type="button">JSON</button>
+      <button class="btn sm" data-l="archive" data-id="${a.id}" type="button">${a.statut === 'Archivée' ? 'Désarchiver' : 'Archiver'}</button>
+      <button class="btn sm danger" data-l="del" data-id="${a.id}" type="button">Supprimer</button></td></tr>`;
+  }).join('');
+}
+$('#view-list').addEventListener('input', e => {
+  const t = e.target;
+  if (t.id === 'l-q') listState.q = t.value; else if (t.id === 'l-statut') listState.statut = t.value; else if (t.id === 'l-annee') listState.annee = t.value;
+  else if (t.id === 'l-auteur') listState.auteur = t.value; else if (t.id === 'l-mod') listState.modeles = t.checked;
+  else if (t.dataset.sel) { t.checked ? listState.sel.add(t.dataset.sel) : listState.sel.delete(t.dataset.sel); return; }
+  renderListBody();
+});
+$('#view-list').addEventListener('click', e => {
+  if (e.target.matches('input[type=checkbox]')) return;
+  const b = e.target.closest('button[data-l]');
+  if (!b) { const tr = e.target.closest('tr[data-open]'); if (tr) openEditor(tr.dataset.open); return; }
+  e.stopPropagation();
+  const a = store.analyses.find(x => x.id === b.dataset.id);
+  switch (b.dataset.l) {
+    case 'new': createAnalysis(); break;
+    case 'base-menu': $('#base-menu').classList.toggle('open'); break;
+    case 'import': importFile(); break;
+    case 'export-base': closeMenus(); download(new Blob([JSON.stringify({ format: 'arbre-des-causes-base', schema: APP.schema, exportedAt: nowIso(), ...store }, null, 1)], { type: 'application/json' }), `base-arbres-des-causes_${isoLocal()}.json`); break;
+    case 'export-base-xlsx': closeMenus(); exportBaseXLSX(); break;
+    case 'examples': closeMenus(); loadExamples(); break;
+    case 'compare': openCompare(); break;
+    case 'clone': { const c = cloneAnalysis(a, false); store.analyses.unshift(c); persist(true); renderListBody(); toast('Copie créée : ' + c.numero); break; }
+    case 'template': createAnalysis(cloneAnalysis(a, true)); toast("Nouvelle analyse créée à partir de l'arbre de " + a.numero); break;
+    case 'json': exportJSON(a); break;
+    case 'archive': a.statut = a.statut === 'Archivée' ? 'En cours' : 'Archivée'; touch(a); renderListBody(); break;
+    case 'del':
+      if (!confirm(`Supprimer définitivement l'analyse ${a.numero} ? Exporter au préalable en JSON si elle doit être conservée.`)) return;
+      store.analyses = store.analyses.filter(x => x !== a); listState.sel.delete(a.id);
+      if (currentId === a.id) { currentId = null; updateHeader(); }
+      persist(true); renderListBody(); break;
+  }
+});
+
+/* ---------- Comparaison ---------- */
+function openCompare() {
+  const ids = [...listState.sel].filter(id => store.analyses.some(a => a.id === id));
+  const o = id => store.analyses.map(a => opt(a.id, a.numero + '  ' + a.titre, id)).join('');
+  openModal('Comparer deux analyses', `<div class="grid2">${fld('Analyse A', `<select id="cmp-a">${o(ids[0] || store.analyses[0]?.id)}</select>`)}${fld('Analyse B', `<select id="cmp-b">${o(ids[1] || store.analyses[1]?.id)}</select>`)}</div><div id="cmp-res"></div>`);
+  const run = () => {
+    const A = store.analyses.find(a => a.id === $('#cmp-a').value), B = store.analyses.find(a => a.id === $('#cmp-b').value);
+    if (!A || !B || A === B) { $('#cmp-res').innerHTML = '<p class="muted">Choisir deux analyses différentes.</p>'; return; }
+    const cs = an => an.nodes.filter(n => n.parentId && kindOf(n.type) === 'cause' && n.statut !== 'Écartée');
+    const ca = cs(A), cb = cs(B), common = [], usedB = new Set();
+    ca.forEach(x => { let best = null, bs = 0; cb.forEach(y => { if (usedB.has(y.id)) return; const s = Math.max(dice(norm(x.label), norm(y.label)), contains(norm(x.label), norm(y.label)) || contains(norm(y.label), norm(x.label)) ? 0.8 : 0); if (s > bs) { bs = s; best = y; } }); if (best && bs >= 0.6) { common.push([x, best, bs]); usedB.add(best.id); x._m = 1; } });
+    const onlyA = ca.filter(x => !x._m), onlyB = cb.filter(y => !usedB.has(y.id)); ca.forEach(x => delete x._m);
+    const fam = an => { const m = {}; cs(an).forEach(n => { const f = n.famille || 'Non renseignée'; m[f] = (m[f] || 0) + 1; }); return m; };
+    const fa = fam(A), fb = fam(B), allF = [...new Set([...Object.keys(fa), ...Object.keys(fb)])];
+    const li = n => `<li>${esc(n.label)}${n.type === 'racine' ? ' <span class="tag crit">racine</span>' : ''}</li>`;
+    $('#cmp-res').innerHTML = `<h3>Causes communes ou proches (${common.length})</h3>${common.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>${esc(A.numero)}</th><th>${esc(B.numero)}</th><th>Proximité</th></tr></thead><tbody>${common.map(([x, y, s]) => `<tr><td>${esc(x.label)}</td><td>${esc(y.label)}</td><td class="num">${Math.round(s * 100)} %</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucune cause commune détectée.</p>'}
+      <div class="cmp"><div><h3>Spécifiques à ${esc(A.numero)} (${onlyA.length})</h3><ul>${onlyA.map(li).join('')}</ul></div><div><h3>Spécifiques à ${esc(B.numero)} (${onlyB.length})</h3><ul>${onlyB.map(li).join('')}</ul></div></div>
+      <h3>Répartition par famille</h3><div class="tbl-wrap"><table class="t"><thead><tr><th>Famille</th><th>${esc(A.numero)}</th><th>${esc(B.numero)}</th></tr></thead><tbody>${allF.map(f => `<tr><td>${esc(f)}</td><td class="num">${fa[f] || 0}</td><td class="num">${fb[f] || 0}</td></tr>`).join('')}</tbody></table></div>`;
+  };
+  $('#cmp-a').addEventListener('input', run); $('#cmp-b').addEventListener('input', run); run();
+}
+
+/* ---------- Bibliothèque ---------- */
+function libUsage() {
+  const counts = new Map(); const all = store.analyses.flatMap(a => a.nodes.filter(n => n.parentId).map(n => norm(n.label)));
+  store.library.forEach(l => { const ln = norm(l.label); counts.set(l.id, all.filter(t => t === ln || contains(ln, t)).length); });
+  return counts;
+}
+function renderLibrary() {
+  const usage = libUsage(), groups = TYPES.filter(t => t.kind !== 'event');
+  const fam = f => `<option value="">Non renseignée</option>${[...new Set([...familles(), ...(f && !familles().includes(f) ? [f] : [])])].map(x => opt(x, x, f)).join('')}`;
+  let h = `<h2>Bibliothèque de causes et d'actions</h2>
+    <p class="lead">Référentiel de formulations réutilisables. Lors de la saisie d'une cause, l'éditeur propose ces entrées et les formulations proches déjà utilisées. Le REX regroupe automatiquement les causes qui reprennent une entrée de la bibliothèque, ce qui en fait aussi la nomenclature des familles de causes.</p>
+    <div class="card" style="max-width:900px;margin-bottom:18px"><h3>Ajouter une entrée</h3><div class="row" style="align-items:flex-end">
+      <label class="fld" style="flex:2;min-width:220px;margin:0"><span>Libellé</span><input type="text" id="lib-new-label"></label>
+      <label class="fld" style="flex:1;min-width:170px;margin:0"><span>Type</span><select id="lib-new-type">${groups.map(t => opt(t.id, t.label)).join('')}</select></label>
+      <label class="fld" style="flex:1;min-width:150px;margin:0"><span>Famille</span><select id="lib-new-fam">${fam('')}</select></label>
+      <button class="btn primary" data-lib="add" type="button">Ajouter</button></div></div>`;
+  groups.forEach(t => {
+    const items = store.library.filter(l => l.type === t.id).sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+    if (!items.length) return;
+    h += `<h3><span class="swatch" style="display:inline-block;background:${colorOf(t.id)};margin-right:8px;vertical-align:-1px"></span>${esc(t.label)} (${items.length})</h3>
+      <div class="tbl-wrap" style="max-width:900px"><table class="t"><thead><tr><th style="width:55%">Libellé</th><th>Famille</th><th>Utilisations</th><th></th></tr></thead><tbody>
+      ${items.map(l => `<tr><td><input type="text" data-lid="${l.id}" data-k="label" value="${esc(l.label)}"></td><td><select data-lid="${l.id}" data-k="famille">${fam(l.famille)}</select></td><td class="num">${usage.get(l.id) || 0}</td><td><button class="btn sm danger" data-lib="del" data-id="${l.id}" type="button">Supprimer</button></td></tr>`).join('')}
+      </tbody></table></div>`;
+  });
+  h += `<div class="row" style="margin-top:18px"><button class="btn" data-lib="reset" type="button">Ajouter les entrées par défaut manquantes</button></div>`;
+  $('#view-library').innerHTML = h;
+}
+$('#view-library').addEventListener('input', e => { const t = e.target; if (!t.dataset.lid) return; const l = store.library.find(x => x.id === t.dataset.lid); if (l) { l[t.dataset.k] = t.value; persist(); } });
+$('#view-library').addEventListener('click', e => {
+  const b = e.target.closest('[data-lib]'); if (!b) return;
+  if (b.dataset.lib === 'add') {
+    const label = $('#lib-new-label').value.trim(); if (!label) return;
+    store.library.push({ id: uid(), type: $('#lib-new-type').value, famille: $('#lib-new-fam').value, label }); persist(); renderLibrary(); toast('Entrée ajoutée.');
+  } else if (b.dataset.lib === 'del') { store.library = store.library.filter(l => l.id !== b.dataset.id); persist(); renderLibrary(); }
+  else if (b.dataset.lib === 'reset') {
+    let n = 0; DEFAULT_LIBRARY.forEach(([type, famille, label]) => { if (!store.library.some(l => norm(l.label) === norm(label))) { store.library.push({ id: uid(), type, famille, label }); n++; } });
+    persist(); renderLibrary(); toast(n + ' entrée(s) ajoutée(s).');
+  }
+});
+
+/* ---------- Retour d'expérience ---------- */
+const rexState = { annee: '', site: '', processus: '', toutes: false };
+/* Regroupe des libellés : d'abord par entrée de bibliothèque contenue dans le libellé, puis par similarité de Dice */
+function clusterItems(items, kindFilter) {
+  const libs = store.library.filter(l => kindFilter(l.type)).map(l => ({ l, n: norm(l.label), len: norm(l.label).split(' ').length })).sort((a, b) => b.len - a.len);
+  const cl = new Map(), free = [];
+  items.forEach(it => {
+    const t = norm(it.n.label); const hit = libs.find(L => L.n && (t === L.n || contains(L.n, t)));
+    if (hit) { if (!cl.has(hit.l.id)) cl.set(hit.l.id, { label: hit.l.label, ref: true, items: [], key: hit.n }); cl.get(hit.l.id).items.push(it); }
+    else free.push(it);
+  });
+  const fc = [];
+  free.forEach(it => {
+    const t = norm(it.n.label); let best = null, bs = 0;
+    for (const c of fc) { const s = dice(c.key, t); if (s > bs) { bs = s; best = c; } }
+    if (best && bs >= 0.7) best.items.push(it); else fc.push({ key: t, items: [it], ref: false });
+  });
+  fc.forEach(c => { const m = {}; c.items.forEach(i => { const k = i.n.label.trim(); m[k] = (m[k] || 0) + 1; }); c.label = Object.entries(m).sort((a, b) => b[1] - a[1])[0][0]; });
+  return [...cl.values(), ...fc].sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label, 'fr'));
+}
+function quarter(d) { if (!d) return ''; const y = d.slice(0, 4), m = +d.slice(5, 7); return y + ' T' + (Math.floor((m - 1) / 3) + 1); }
+function renderRex() {
+  const A0 = store.analyses;
+  const ans = A0.filter(a => (!rexState.annee || (a.date || '').startsWith(rexState.annee)) && (!rexState.site || a.site === rexState.site) && (!rexState.processus || a.processus === rexState.processus));
+  const uniq = k => [...new Set(A0.map(a => k === 'annee' ? (a.date || '').slice(0, 4) : a[k]).filter(Boolean))].sort();
+  const sel = (id, k, all) => `<select id="${id}"><option value="">${all}</option>${uniq(k).map(v => opt(v, v, rexState[k])).join('')}</select>`;
+  const causes = [], actions = [];
+  ans.forEach(a => a.nodes.forEach(n => {
+    if (!n.parentId) return; const k = kindOf(n.type);
+    if (k === 'cause' && n.statut !== 'Écartée') causes.push({ a, n }); else if (k === 'action') actions.push({ a, n });
+  }));
+  const racines = causes.filter(c => c.n.type === 'racine');
+  const base = rexState.toutes ? causes : racines;
+  const clusters = clusterItems(base, t => kindOf(t) === 'cause');
+  const closed = actions.filter(x => x.n.statut === 'Clôturée').length, eva = actions.filter(x => x.n.efficacite && x.n.efficacite !== 'Non évaluée'), eff = eva.filter(x => x.n.efficacite === 'Efficace');
+  const late = actions.filter(x => actionStatus(x.n) === 'En retard').length;
+  const kpi = (v, l) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  let h = `<h2>Retour d'expérience</h2><p class="lead">Synthèse de toutes les analyses enregistrées : causes récurrentes, familles, tendances et efficacité des actions. Données utilisables en revue de direction ou en revue de processus.</p>
+    <div class="filters">${sel('r-annee', 'annee', 'Toutes années')}${sel('r-site', 'site', 'Tous sites')}${sel('r-proc', 'processus', 'Tous processus')}
+    <label class="chk"><input type="checkbox" id="r-toutes"${rexState.toutes ? ' checked' : ''}> Inclure toutes les causes, pas seulement les causes racines</label>
+    <span class="spacer"></span><button class="btn" id="r-xlsx" type="button">Exporter la synthèse (Excel)</button></div>`;
+  if (!ans.length) { $('#view-rex').innerHTML = h + `<div class="note">Aucune analyse ne correspond. Le REX se construit au fil des analyses ; les exemples du menu Analyses, Base complète permettent de le découvrir.</div>`; bindRex(); return; }
+  h += `<div class="kpis">${kpi(ans.length, 'Analyses')}${kpi(causes.length, 'Causes retenues')}${kpi(racines.length, 'Causes racines')}${kpi(actions.length, 'Actions')}
+    ${kpi(actions.length ? Math.round(closed / actions.length * 100) + ' %' : 'n.d.', 'Actions clôturées')}${kpi(late, 'Actions en retard')}${kpi(eva.length ? Math.round(eff.length / eva.length * 100) + ' %' : 'n.d.', 'Actions évaluées efficaces')}</div>`;
+
+  const maxC = Math.max(1, ...clusters.map(c => c.items.length));
+  const recur = clusters.filter(c => c.items.length >= 1).slice(0, 15);
+  h += `<div class="cards"><div class="card" style="grid-column:1/-1"><h3>${rexState.toutes ? 'Causes' : 'Causes racines'} les plus fréquentes</h3><p class="sub">Regroupement par entrée de la bibliothèque, puis par proximité de formulation.</p>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Cause</th><th style="width:22%">Occurrences</th><th>Analyses</th><th>Familles</th><th>Processus</th><th></th></tr></thead><tbody>
+    ${recur.map(c => {
+      const an = [...new Set(c.items.map(i => i.a))], pr = [...new Set(c.items.map(i => i.a.processus).filter(Boolean))], fa = [...new Set(c.items.map(i => i.n.famille).filter(Boolean))];
+      const sys = an.length >= 2 && (pr.length >= 2 || an.length >= 3);
+      return `<tr><td>${esc(c.label)}${c.ref ? ' <span class="tag">bibliothèque</span>' : ''}</td><td><div class="bars"><div class="br" style="grid-template-columns:1fr 26px;margin:0"><div class="track"><span style="width:${c.items.length / maxC * 100}%"></span></div><div class="bv">${c.items.length}</div></div></div></td>
+      <td>${an.map(a => `<button class="linkish" data-open-an="${a.id}" type="button">${esc(a.numero)}</button>`).join(', ')}</td><td>${esc(fa.join(', '))}</td><td>${esc(pr.join(', '))}</td><td>${sys ? '<span class="tag crit">systémique</span>' : an.length >= 2 ? '<span class="tag warn">récurrente</span>' : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" class="muted">Aucune cause racine enregistrée.</td></tr>'}</tbody></table></div></div>`;
+
+  const famAll = {}, famRoot = {};
+  causes.forEach(c => { const f = c.n.famille || 'Non renseignée'; famAll[f] = (famAll[f] || 0) + 1; });
+  racines.forEach(c => { const f = c.n.famille || 'Non renseignée'; famRoot[f] = (famRoot[f] || 0) + 1; });
+  const fams = [...familles(), ...Object.keys(famAll).filter(f => !familles().includes(f))].filter(f => famAll[f]);
+  const mf = Math.max(1, ...Object.values(famAll));
+  h += `<div class="card"><h3>Familles ${store.settings.classification}</h3><p class="sub">Toutes les causes retenues et causes racines par famille.</p><div class="bars">
+    ${fams.map(f => `<div class="br"><div class="bl" title="${esc(f)}">${esc(f)}</div><div class="track"><span class="a" style="width:${famAll[f] / mf * 100}%"></span><span class="r" style="width:${(famRoot[f] || 0) / mf * 100}%"></span></div><div class="bv">${famAll[f]}/${famRoot[f] || 0}</div></div>`).join('') || '<p class="muted">Aucune famille renseignée.</p>'}
+    </div><div class="lgd"><span><i style="background:var(--bar)"></i>Toutes causes</span><span><i style="background:var(--bar2)"></i>Causes racines</span></div></div>`;
+
+  const ty = {}; causes.forEach(c => ty[c.n.type] = (ty[c.n.type] || 0) + 1);
+  const mt = Math.max(1, ...Object.values(ty));
+  h += `<div class="card"><h3>Types de causes</h3><p class="sub">Nature des causes retenues dans les arbres.</p><div class="bars">
+    ${TYPES.filter(t => ty[t.id]).map(t => `<div class="br"><div class="bl">${esc(t.label)}</div><div class="track"><span style="width:${ty[t.id] / mt * 100}%;background:${colorOf(t.id)}"></span></div><div class="bv">${ty[t.id]}</div></div>`).join('')}</div></div>`;
+
+  const qs = [...new Set(ans.map(a => quarter(a.date)).filter(Boolean))].sort().slice(-6);
+  const tr = {}; base.forEach(c => { const q = quarter(c.a.date), f = c.n.famille || 'Non renseignée'; if (!qs.includes(q)) return; tr[f] = tr[f] || {}; tr[f][q] = (tr[f][q] || 0) + 1; });
+  const nq = {}; ans.forEach(a => { const q = quarter(a.date); nq[q] = (nq[q] || 0) + 1; });
+  h += `<div class="card"><h3>Tendance par trimestre</h3><p class="sub">${rexState.toutes ? 'Causes' : 'Causes racines'} par famille et par trimestre de l'événement.</p>
+    <div class="tbl-wrap"><table class="t"><thead><tr><th>Famille</th>${qs.map(q => `<th class="num">${q}</th>`).join('')}</tr></thead><tbody>
+    <tr><td><b>Analyses</b></td>${qs.map(q => `<td class="num"><b>${nq[q] || 0}</b></td>`).join('')}</tr>
+    ${Object.keys(tr).sort().map(f => `<tr><td>${esc(f)}</td>${qs.map(q => `<td class="num">${tr[f][q] || ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+
+  const ac = clusterItems(actions, t => kindOf(t) === 'action').map(c => ({ ...c, eff: c.items.filter(i => i.n.efficacite === 'Efficace').length, ko: c.items.filter(i => i.n.efficacite === 'Non efficace').length }))
+    .filter(c => c.eff || c.ko).sort((a, b) => b.eff - a.eff || a.ko - b.ko).slice(0, 10);
+  h += `<div class="card"><h3>Actions jugées efficaces</h3><p class="sub">Actions dont l'efficacité a été évaluée, regroupées par formulation.</p>
+    ${ac.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Action</th><th class="num">Efficace</th><th class="num">Non efficace</th><th>Analyses</th></tr></thead><tbody>${ac.map(c => `<tr><td>${esc(c.label)}</td><td class="num">${c.eff}</td><td class="num">${c.ko}</td><td>${[...new Set(c.items.map(i => i.a))].map(a => esc(a.numero)).join(', ')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucune efficacité évaluée pour le moment. Renseigner le champ Efficacité des actions clôturées.</p>'}</div>`;
+
+  const sys = clusters.filter(c => { const an = new Set(c.items.map(i => i.a.id)); const pr = new Set(c.items.map(i => i.a.processus).filter(Boolean)); return an.size >= 2 && (pr.size >= 2 || an.size >= 3); });
+  h += `<div class="card"><h3>Problématiques systémiques</h3><p class="sub">Causes présentes dans au moins deux analyses touchant des processus différents, ou dans trois analyses et plus.</p>
+    ${sys.length ? sys.map(c => { const pr = [...new Set(c.items.map(i => i.a.processus).filter(Boolean))]; const an = [...new Set(c.items.map(i => i.a.numero))];
+      return `<div class="vitem"><div class="vh"><span>${esc(c.label)}</span><span class="tag crit">${an.length} analyses</span></div><div class="small muted">${esc(an.join(', '))}${pr.length ? ', processus : ' + esc(pr.join(', ')) : ''}</div></div>`; }).join('') : '<p class="muted">Aucune problématique transverse détectée sur la période.</p>'}</div></div>`;
+  $('#view-rex').innerHTML = h; bindRex();
+  $('#view-rex')._data = { ans, clusters, causes, actions, racines };
+}
+function bindRex() {
+  const v = $('#view-rex');
+  [['r-annee', 'annee'], ['r-site', 'site'], ['r-proc', 'processus']].forEach(([id, k]) => { const el = $('#' + id); if (el) el.oninput = () => { rexState[k] = el.value; renderRex(); }; });
+  const t = $('#r-toutes'); if (t) t.oninput = () => { rexState.toutes = t.checked; renderRex(); };
+  const x = $('#r-xlsx'); if (x) x.onclick = exportRexXLSX;
+  v.onclick = e => { const b = e.target.closest('[data-open-an]'); if (b) openEditor(b.dataset.openAn); };
+}
+
+/* ---------- Paramètres ---------- */
+function renderSettings() {
+  const s = store.settings;
+  const inp = (k, l) => fld(l, `<input type="text" data-s="${k}" value="${esc(s[k])}">`);
+  $('#view-settings').innerHTML = `<h2>Paramètres</h2><p class="lead">Ces réglages sont enregistrés dans ce navigateur et inclus dans l'export de la base.</p>
+    <h3>Identité et numérotation</h3><div class="settings-grid">${inp('auteur', 'Votre nom (auteur par défaut)')}${inp('organisation', 'Organisation (rapports)')}${inp('site', 'Site par défaut')}${inp('prefixe', 'Préfixe de numérotation')}</div>
+    <h3>Présentation</h3><div class="settings-grid">
+      ${fld('Thème', `<select data-s="theme">${[['auto', 'Automatique (système)'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(([v, l]) => opt(v, l, s.theme)).join('')}</select>`)}
+      ${fld('Style des éléments', `<select data-s="style">${[['teinte', 'Fond teinté, bordure colorée'], ['plein', 'Fond plein']].map(([v, l]) => opt(v, l, s.style)).join('')}</select>`)}
+      ${fld('Sens par défaut des nouveaux arbres', `<select data-s="orientation">${[['droite', 'Causes vers la droite'], ['gauche', 'Causes vers la gauche'], ['bas', 'Causes vers le bas']].map(([v, l]) => opt(v, l, s.orientation)).join('')}</select>`)}
+      ${fld('Classification des causes', `<select data-s="classification">${[['8M', '8M (Main d’œuvre, Méthode, Matière, Machine, Milieu, Management, Mesure, Maintenance)'], ['5M', '5M (Main d’œuvre, Méthode, Milieu, Matière, Matériel)']].map(([v, l]) => opt(v, l, s.classification)).join('')}</select>`)}
+    </div>
+    <h3>Couleurs par type d'élément</h3><div class="colors">${TYPES.map(t => `<label><input type="color" data-color="${t.id}" value="${colorOf(t.id)}"><span>${esc(t.label)}</span></label>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="s-reset-colors" type="button">Rétablir les couleurs par défaut</button></div>
+    <h3>Données</h3>
+    <div class="note">La base est stockée localement dans ce navigateur (${Math.round(Storage.size() / 1024 * 2)} Ko). Elle n'est ni partagée ni synchronisée : vider les données du navigateur la supprime. Exporter régulièrement la base en JSON (menu Analyses, Base complète) et la déposer sur OneDrive ou SharePoint pour la sauvegarder ou la transmettre à un collègue, qui l'importera avec Importer (JSON).</div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="s-import" type="button">Importer une base ou une analyse (JSON)</button><button class="btn danger" id="s-purge" type="button">Effacer toutes les données de ce navigateur</button></div>
+    <h3>Intégration Microsoft 365</h3>
+    <div class="note">L'outil n'utilise aucun serveur. Les formats produits sont choisis pour une intégration ultérieure : JSON documenté (identifiants stables, nœuds à plat avec identifiant du parent) déposable dans une bibliothèque SharePoint ou OneDrive et exploitable par Power Automate ; export Excel à plat de la base, importable dans Microsoft Lists ou dans Power Query et Power BI ; fichier .vsdx ouvrable dans Visio et Visio pour le web ; .docx modifiable partageable dans Teams. Le code isole le stockage (objet Storage) et les exports (registre Exporters) pour brancher plus tard un connecteur SharePoint sans modifier l'éditeur.</div>
+    <p class="small muted" style="margin-top:24px">${APP.nom}, version ${APP.version}. Fichier autonome, fonctionnement hors ligne.</p>`;
+}
+$('#view-settings').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.s) { store.settings[t.dataset.s] = t.value; persist(); if (t.dataset.s === 'theme') { if (t.value !== 'auto') localStorage.setItem('theme', t.value === 'sombre' ? 'dark' : 'light'); applyTheme(); } }
+  if (t.dataset.color) { store.settings.couleurs[t.dataset.color] = t.value; persist(); }
+});
+$('#view-settings').addEventListener('click', e => {
+  if (e.target.id === 's-reset-colors') { store.settings.couleurs = {}; persist(); renderSettings(); }
+  if (e.target.id === 's-import') importFile();
+  if (e.target.id === 's-purge') {
+    if (!confirm('Effacer toutes les analyses, la bibliothèque et les paramètres de ce navigateur ? Cette opération est irréversible.')) return;
+    if (!confirm('Confirmer la suppression définitive ?')) return;
+    localStorage.removeItem(STORE_KEY); initStore(); currentId = null; persist(true); updateHeader(); showView('list');
+  }
+});
+/* En mode « auto », le thème suit celui choisi sur le site (clé 'theme'), sinon le système */
+function applyTheme() {
+  const t = store.settings.theme, site = localStorage.getItem('theme');
+  const dark = t === 'sombre' || (t === 'auto' && (site === 'dark' || site === 'light' ? site === 'dark'
+    : !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches)));
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  $('#btn-theme').textContent = dark ? 'Thème clair' : 'Thème sombre';
+  if (activeView === 'editor') renderTree();
+}
+$('#btn-theme').addEventListener('click', () => {
+  localStorage.setItem('theme', isDark() ? 'light' : 'dark'); store.settings.theme = 'auto';
+  persist(); applyTheme(); if (activeView === 'settings') renderSettings();
+});
+
+/* ---------- Modale, notifications, fichiers ---------- */
+function openModal(title, body, foot = '') { $('#modal-title').textContent = title; $('#modal-body').innerHTML = body; $('#modal-foot').innerHTML = foot; $('#modal').classList.remove('hidden'); }
+function closeModal() { $('#modal').classList.add('hidden'); }
+$('#modal-close').addEventListener('click', closeModal);
+$('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+function toast(msg) { const d = document.createElement('div'); d.textContent = msg; $('#toast').appendChild(d); setTimeout(() => d.remove(), 3800); }
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+function importFile() { const f = $('#file-input'); f.value = ''; f.click(); }
+$('#file-input').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  let data; try { data = JSON.parse(await file.text()); } catch (err) { toast("Fichier illisible : ce n'est pas un JSON valide."); return; }
+  importData(data);
+});
+function importData(data) {
+  let list = [], lib = [];
+  if (data && data.format === 'arbre-des-causes-base') { list = data.analyses || []; lib = data.library || []; }
+  else if (data && data.format === 'arbre-des-causes' && data.analyse) list = [data.analyse];
+  else if (data && Array.isArray(data.nodes)) list = [data];
+  else { toast('Format non reconnu.'); return; }
+  let added = 0, replaced = 0, copies = 0;
+  list.forEach(a => {
+    normalizeAnalysis(a); if (!a.id) a.id = uid();
+    const ex = store.analyses.find(x => x.id === a.id);
+    if (ex) {
+      if (confirm(`L'analyse ${a.numero} existe déjà (modifiée le ${fmtDateTime(ex.updatedAt)}).\nOK : remplacer par la version importée (modifiée le ${fmtDateTime(a.updatedAt)}).\nAnnuler : importer comme copie.`)) {
+        store.analyses[store.analyses.indexOf(ex)] = a; replaced++;
+      } else { const c = cloneAnalysis(a, false); c.titre = a.titre + ' (import)'; store.analyses.unshift(c); copies++; }
+    } else { store.analyses.unshift(a); added++; }
+  });
+  let libAdded = 0; lib.forEach(l => { if (l.label && !store.library.some(x => norm(x.label) === norm(l.label))) { store.library.push({ id: l.id || uid(), type: l.type, famille: l.famille || '', label: l.label }); libAdded++; } });
+  persist(true); toast(`Import terminé : ${added} ajoutée(s), ${replaced} remplacée(s), ${copies} copie(s)${libAdded ? ', ' + libAdded + ' entrée(s) de bibliothèque' : ''}.`);
+  if (list.length === 1 && added + replaced === 1) openEditor(list[0].id); else showView(activeView === 'editor' ? 'list' : activeView);
+}
+
+/* ---------- Exemples ---------- */
+function loadExamples() {
+  const build = (meta, tree) => {
+    const an = normalizeAnalysis(Object.assign({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), auteur: store.settings.auteur || 'Service qualité', site: store.settings.site || 'Site exemple', orientation: 'droite', versions: [], nodes: [] }, meta));
+    an.nodes = [];
+    (function add(spec, parentId, order) {
+      const [type, label, famille, extra, kids] = spec;
+      const n = mkNode(Object.assign({ parentId, order, type, label, famille: famille || '', auteur: an.auteur, createdAt: an.createdAt,
+        statut: kindOf(type) === 'action' ? 'Ouverte' : kindOf(type) === 'cause' ? 'Confirmée' : '', efficacite: kindOf(type) === 'action' ? 'Non évaluée' : '' }, extra || {}));
+      an.nodes.push(n); (kids || []).forEach((k, i) => add(k, n.id, i));
+    })(tree, null, 0);
+    return an;
+  };
+  const ex = [
+    build({ numero: 'EX-2026-001', titre: 'Mode opératoire au mauvais indice en atelier de montage', date: '2026-03-12', processus: 'Maîtrise documentaire', gravite: 'Significative', refFNC: 'FNC-2026-118', refAutre: 'Audit interne AI-2026-04', statut: 'Clôturée', modele: true,
+      description: "Lors de l'audit interne du poste de montage des garnitures, le mode opératoire MO-245 présent au poste était à l'indice B alors que l'indice D est en vigueur depuis janvier.", consequences: 'Trois garnitures montées selon une séquence de serrage périmée, reprises avant expédition.' },
+      ['evenement', 'Mode opératoire MO-245 à l’indice B utilisé au poste alors que l’indice D est en vigueur', '', { preuve: 'Constat d’audit, photo du document au poste' }, [
+        ['immediate', "L'opérateur a utilisé l'exemplaire papier présent au poste", 'Méthode', { preuve: 'Entretien opérateur' }, [
+          ['documentaire', "Document au mauvais indice au poste de travail : l'ancien exemplaire n'a pas été retiré à la diffusion de l'indice D", 'Méthode', { preuve: 'Bordereau de diffusion sans liste de retrait' }, [
+            ['racine', 'Diffusion documentaire insuffisante : pas de retrait tracé des exemplaires périmés', 'Méthode', { preuve: 'Procédure PG-04 sans étape de retrait' }, [
+              ['corrective', 'Retirer les documents périmés des postes de l’atelier de montage', '', { responsable: 'Chef d’atelier', echeance: '2026-03-20', statut: 'Clôturée', efficacite: 'Efficace' }],
+              ['preventive', 'Ajouter une liste de retrait signée au bordereau de diffusion (PG-04)', '', { responsable: 'Gestionnaire documentaire', echeance: '2026-04-30', statut: 'Clôturée', efficacite: 'Efficace' }]]]]],
+          ['humaine', "Opérateur non informé de la révision de l'indice D", "Main d'œuvre", { preuve: 'Feuille d’émargement absente' }, [
+            ['racine', 'Formation insuffisante aux évolutions des modes opératoires', "Main d'œuvre", {}, [
+              ['corrective', 'Former et habiliter les opérateurs concernés sur l’indice D', '', { responsable: 'Responsable production', echeance: '2026-04-15', statut: 'Clôturée', efficacite: 'Efficace' }]]]]]]],
+        ['contributive', "Aucune vérification de l'indice lors de la prise de poste", 'Méthode', { statut: 'À vérifier' }, [
+          ['racine', 'Absence de vérification indépendante des documents en poste', 'Management', {}, [
+            ['preventive', "Intégrer le sujet à l'audit de poste mensuel (vérification des indices)", '', { responsable: 'Service qualité', echeance: '2026-05-31', statut: 'Clôturée', efficacite: 'Non évaluée' }]]]]]]]),
+    build({ numero: 'EX-2026-002', titre: 'Couple de serrage hors tolérance sur brides de corps de pompe', date: '2026-06-03', processus: 'Production', gravite: 'Majeure', refRI: 'RI-2026-0412', refCAPA: 'CAPA-2026-031', statut: 'En cours',
+      description: 'Contrôle final : 4 brides sur 12 présentent un couple inférieur de 15 % à la valeur spécifiée.', consequences: 'Lot bloqué, reprise de serrage et contrôle à 100 %.' },
+      ['evenement', 'Couple de serrage inférieur de 15 % à la spécification sur 4 brides sur 12', '', { preuve: 'RI-2026-0412' }, [
+        ['immediate', 'Clé dynamométrique déréglée utilisée pour le serrage', 'Mesure', { preuve: 'Vérification métrologique du 05/06' }, [
+          ['technique', "Clé non présente dans le plan d'étalonnage", 'Mesure', {}, [
+            ['racine', 'Moyen de mesure non étalonné : clé achetée hors circuit métrologie', 'Mesure', {}, [
+              ['corrective', 'Recenser et étalonner toutes les clés dynamométriques de l’atelier', '', { responsable: 'Métrologie', echeance: '2026-07-15', statut: 'Clôturée', efficacite: 'Efficace' }],
+              ['preventive', 'Ajouter un point de contrôle au plan de contrôle : vérification d’étalonnage avant serrage', '', { responsable: 'Méthodes', echeance: '2026-09-30', statut: 'En cours' }]]]]]]],
+        ['humaine', "Opérateur intérimaire n'ayant pas identifié l'anomalie", "Main d'œuvre", { preuve: 'Entretien' }, [
+          ['racine', 'Formation insuffisante des nouveaux opérateurs au serrage contrôlé', "Main d'œuvre", {}, [
+            ['corrective', 'Former et habiliter les opérateurs concernés au serrage contrôlé', '', { responsable: 'Responsable production', echeance: '2026-07-31', statut: 'Clôturée', efficacite: 'Non efficace' }]]]]],
+        ['documentaire', 'Séquence de serrage en croix non décrite', 'Méthode', { statut: 'À vérifier' }, [
+          ['racine', 'Procédure ambiguë sur la séquence et les paliers de serrage', 'Méthode', {}, [
+            ['corrective', 'Mettre à jour la procédure et la rediffuser avec schéma de séquence', '', { responsable: 'Méthodes', echeance: '2026-08-31', statut: 'En cours' }]]]]]]]),
+    build({ numero: 'EX-2026-003', titre: "Rapport d'inspection transmis au client sans signature du contrôleur", date: '2026-09-18', processus: 'Contrôle et inspection', gravite: 'Significative', refFNC: 'FNC-2026-207', refAutre: 'Réclamation client', statut: 'En validation',
+      description: "Le dossier de fin de fabrication transmis au client contenait un rapport d'inspection dimensionnelle non signé.", consequences: 'Réclamation client, réémission du dossier.' },
+      ['evenement', "Rapport d'inspection dimensionnelle non signé dans le dossier transmis au client", '', { preuve: 'Courriel client du 22/09' }, [
+        ['immediate', 'Dossier envoyé sans relecture finale', 'Méthode', {}, [
+          ['racine', "Absence de vérification indépendante avant l'envoi du dossier client", 'Management', {}, [
+            ['preventive', 'Mettre en place une vérification indépendante des dossiers avant envoi', '', { responsable: 'Responsable qualité projet', echeance: '2026-10-31', statut: 'En cours' }]]],
+          ['organisationnelle', 'Envoi réalisé le dernier jour du mois pour respecter la facturation', 'Management', {}, [
+            ['racine', 'Charge de travail excessive en fin de mois sur le circuit de validation', 'Management', {}, [
+              ['corrective', 'Lisser les envois de dossiers sur le mois avec le planning projet', '', { responsable: 'Chef de projet', echeance: '2026-11-15', statut: 'Ouverte' }]]]]]]],
+        ['humaine', 'Contrôleur non informé que sa signature était requise', "Main d'œuvre", {}, [
+          ['racine', 'Formation insuffisante au circuit de validation des rapports', "Main d'œuvre", {}, [
+            ['corrective', 'Former et habiliter les contrôleurs au circuit de validation', '', { responsable: 'Service qualité', echeance: '2026-10-20', statut: 'Ouverte' }]]]]]]])
+  ];
+  let n = 0; ex.forEach(a => { if (!store.analyses.some(x => x.numero === a.numero)) { store.analyses.push(a); n++; } });
+  persist(true); renderList(); toast(n ? n + ' analyse(s) d’exemple chargée(s).' : 'Les exemples sont déjà présents.');
+}
+
+/* =====================================================================
+   8. EXPORTS
+   Registre unique : chaque format reçoit la même analyse et s'appuie sur buildGeometry.
+   Pour ajouter un format : Exporters.monformat = { label, hint, run(an) }.
+   ===================================================================== */
+const Exporters = {
+  pdf:  { label: 'Rapport PDF', hint: "Ouvre l'impression : choisir Enregistrer au format PDF", run: an => exportPDF(an) },
+  docx: { label: 'Word (.docx) modifiable', hint: 'Formes et connecteurs Word éditables, tableaux', run: an => exportDOCX(an) },
+  vsdx: { label: 'Visio (.vsdx)', hint: 'Formes indépendantes, connecteurs collés, données de forme', run: an => exportVSDX(an) },
+  svg:  { label: 'SVG structuré', hint: 'Import dans Visio, PowerPoint ou Inkscape', run: an => download(new Blob([treeSVG(an)], { type: 'image/svg+xml' }), fileBase(an) + '.svg') },
+  png:  { label: 'Image PNG', hint: 'Pour un courriel ou une présentation', run: an => exportPNG(an) },
+  xlsx: { label: 'Excel (.xlsx)', hint: 'Causes, liens hiérarchiques, actions', run: an => exportXLSX(an), sepBefore: true },
+  json: { label: 'JSON (réimport)', hint: 'Fichier de l’analyse à réimporter ou partager', run: an => exportJSON(an) }
+};
+function runExport(k, an) {
+  if (!an) return;
+  try { Exporters[k].run(an); } catch (err) { console.error(err); toast('Export impossible : ' + err.message); }
+}
+const fileBase = an => (an.numero || 'analyse') + '_' + slug(an.titre);
+function exportJSON(an) { download(new Blob([JSON.stringify({ format: 'arbre-des-causes', schema: APP.schema, exportedAt: nowIso(), analyse: an }, null, 1)], { type: 'application/json' }), fileBase(an) + '.json'); }
+
+/* ---------- SVG autonome ---------- */
+function treeSVG(an) {
+  const g = buildGeometry(an, { expandAll: true, ctx: CTX_LIGHT }), HEAD = 56, W = Math.max(g.w, 520), H = g.h + HEAD;
+  let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Arial">`;
+  s += `<title>${esc(an.numero + ' ' + an.titre)}</title><rect width="${W}" height="${H}" fill="#ffffff"/>`;
+  s += `<g id="entete"><text x="${G.MARGIN}" y="26" font-size="15" font-weight="bold" fill="#1f2933">${esc(an.numero + '   ' + an.titre)}</text>`;
+  s += `<text x="${G.MARGIN}" y="44" font-size="11" fill="#5f6b7a">${esc(['Arbre des causes', fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</text></g>`;
+  s += `<g id="arbre" transform="translate(0,${HEAD})"><g id="connecteurs">`;
+  g.edges.forEach(e => s += `<path d="M${e.pts.map(p => p.join(' ')).join(' L')}" fill="none" stroke="#8792a2" stroke-width="1.4"/>`);
+  s += `</g><g id="elements">`;
+  g.nodes.forEach(I => s += nodeSVG(I, {}));
+  return s + '</g></g></svg>';
+}
+function exportPNG(an) {
+  const svgTxt = treeSVG(an), m = /width="(\d+)" height="(\d+)"/.exec(svgTxt), w = +m[1], h = +m[2];
+  const scale = Math.min(2, 12000 / Math.max(w, h));
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas'); c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(b => download(b, fileBase(an) + '.png'), 'image/png');
+  };
+  img.onerror = () => toast('Rendu PNG impossible dans ce navigateur. Utiliser l’export SVG.');
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgTxt);
+}
+
+/* ---------- Données tabulaires communes (PDF, Word, Excel) ---------- */
+function tableData(an) {
+  const num = numbering(an), kids = childrenMap(an);
+  const ordered = []; (function walk(n, d) { ordered.push({ n, d }); (kids.get(n.id) || []).forEach(c => walk(c, d + 1)); })(rootOf(an), 0);
+  const causes = ordered.filter(x => kindOf(x.n.type) === 'cause');
+  const actions = ordered.filter(x => kindOf(x.n.type) === 'action');
+  const parentLabel = n => { const p = getNode(n.parentId, an); return p ? (num.get(p.id) + ' ' + p.label) : ''; };
+  const racines = causes.filter(x => x.n.type === 'racine' && x.n.statut !== 'Écartée').map(x => ({ ...x,
+    actions: [...descendants(an, x.n.id)].map(id => getNode(id, an)).filter(n => kindOf(n.type) === 'action') }));
+  return { num, ordered, causes, actions, racines, parentLabel };
+}
+function infoRows(an) {
+  return [['Numéro', an.numero], ['Titre', an.titre], ["Date de l'événement", fmtDate(an.date)], ['Site', an.site], ['Processus concerné', an.processus], ['Gravité', an.gravite],
+    ['Référence RI', an.refRI], ['Référence FNC', an.refFNC], ['Référence CAPA', an.refCAPA], ['Autres références', an.refAutre],
+    ['Auteur', an.auteur], ['Validateur', an.validateur], ['Statut', an.statut], ['Version', an.versions.length ? 'Version ' + an.versions.length + ' du ' + fmtDate(isoLocal(new Date(an.versions[an.versions.length - 1].date))) : 'Aucune version figée'], ["Date d'édition", fmtDate(isoLocal())]];
+}
+
+/* ---------- PDF par impression du navigateur (rendu vectoriel) ---------- */
+function exportPDF(an) {
+  const td = tableData(an), org = store.settings.organisation || '';
+  /* Taille explicite en millimètres, proportions conservées : jamais d'agrandissement au-delà de l'échelle 1,
+     réduction uniforme si l'arbre dépasse la zone utile d'une page A4 paysage (266 x 158 mm). */
+  let svgTxt = treeSVG(an).replace(/^<\?xml[^>]*>\s*/, '');
+  const dm = /width="(\d+(?:\.\d+)?)" height="(\d+(?:\.\d+)?)"/.exec(svgTxt), PXMM = 25.4 / 96;
+  const wmm = +dm[1] * PXMM, hmm = +dm[2] * PXMM, k = Math.min(1, 266 / wmm, 158 / hmm);
+  svgTxt = svgTxt.replace(dm[0], `width="${(wmm * k).toFixed(1)}mm" height="${(hmm * k).toFixed(1)}mm" preserveAspectRatio="xMidYMid meet"`);
+  const tbl = (head, rows) => `<table><thead><tr>${head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(fileBase(an))}</title><style>
+    @page{size:A4 landscape;margin:12mm 14mm}
+    body{font:10pt/1.4 Arial,sans-serif;color:#1f2933;margin:0}
+    h1{font-size:22pt;margin:0 0 4mm;color:#2f3e4d} h2{font-size:13pt;color:#2f3e4d;margin:7mm 0 3mm;border-bottom:1px solid #c3c9d1;padding-bottom:1.5mm}
+    .org{color:#5f6b7a;font-size:10pt;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10mm}
+    .sub{font-size:14pt;margin-bottom:6mm} table{border-collapse:collapse;width:100%;font-size:9pt;page-break-inside:auto} tr{page-break-inside:avoid}
+    th{background:#d9dee4;text-align:left;padding:4px 6px;border:1px solid #a0a7b0} td{padding:4px 6px;border:1px solid #a0a7b0;vertical-align:top;white-space:pre-wrap}
+    table.kv th{width:38%} .cover{display:grid;grid-template-columns:1.2fr 1fr;gap:10mm;align-items:start} table.kv td,table.kv th{padding:2.5px 6px} .visa td{height:16mm} .pb{page-break-before:always} .tree{text-align:center} .tree svg{display:inline-block;max-width:none}
+    p{margin:0 0 3mm;white-space:pre-wrap}</style></head><body>
+    <div class="org">${esc(org)}${an.site ? ', ' + esc(an.site) : ''}</div><h1>Analyse des causes</h1><div class="sub">${esc(an.numero)}<br>${esc(an.titre)}</div>
+    <div class="cover"><div><table class="kv"><tbody>${infoRows(an).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}</tbody></table></div><div>
+    <h2 style="margin-top:0">Visas</h2><table class="visa"><thead><tr><th></th><th>Nom</th><th>Date</th><th>Visa</th></tr></thead><tbody><tr><td>Rédigé par</td><td>${esc(an.auteur)}</td><td></td><td></td></tr><tr><td>Vérifié par</td><td>${esc(an.validateur)}</td><td></td><td></td></tr><tr><td>Approuvé par</td><td></td><td></td><td></td></tr></tbody></table></div></div>
+    <h2 class="pb">1. Description du problème</h2><p>${esc(an.description || 'Non renseignée.')}</p>
+    <h2>Conséquences observées</h2><p>${esc(an.consequences || 'Non renseignées.')}</p>
+    <h2>Synthèse</h2><p>${td.causes.filter(x => x.n.statut !== 'Écartée').length} cause(s) retenue(s), dont ${td.racines.length} cause(s) racine(s), et ${td.actions.length} action(s).</p>
+    <div class="land"><h2 class="pb">2. Arbre des causes</h2><div class="tree">${svgTxt}</div>
+    <h2 class="pb">3. Causes identifiées</h2>${tbl(['N°', 'Type', 'Famille', 'Cause', 'Cause de rang supérieur', 'Preuve', 'Statut'], td.causes.map(({ n }) => [td.num.get(n.id), TYPE[n.type].label, n.famille, n.label, td.parentLabel(n), n.preuve, n.statut]))}
+    <h2>4. Causes racines et actions associées</h2>${tbl(['N°', 'Cause racine', 'Famille', 'Actions'], td.racines.map(r => [td.num.get(r.n.id), r.n.label, r.n.famille, r.actions.map(a => td.num.get(a.id) + ' ' + a.label).join('\n') || 'Aucune action']))}
+    <h2>5. Plan d'actions</h2>${tbl(['N°', 'Type', 'Action', 'Cause traitée', 'Responsable', 'Échéance', 'Statut', 'Efficacité'], td.actions.map(({ n }) => [td.num.get(n.id), TYPE[n.type].label, n.label, td.parentLabel(n), n.responsable, fmtDate(n.echeance), actionStatus(n), n.efficacite]))}
+    ${an.versions.length ? `<h2>6. Historique des versions</h2>${tbl(['Version', 'Date', 'Auteur', 'Commentaire'], an.versions.map(v => ['Version ' + v.n, fmtDateTime(v.date), v.auteur, v.commentaire]))}` : ''}</div>
+    </body></html>`;
+  const fr = $('#print-frame');
+  fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Impression impossible : ' + e.message); } }, 150); fr.onload = null; };
+  fr.srcdoc = html;
+  toast("Dans la fenêtre d'impression : Destination « Save as PDF », Layout « Landscape », Scale « Default ».");
+}
+
+/* ---------- ZIP (méthode « stockée », suffisante pour les formats Office) ---------- */
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC_TABLE[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files, mime) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  for (const f of files) {
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const lh = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2], [28, 0, 2]]
+      .forEach(([o, v, s]) => s === 4 ? lh.setUint32(o, v, true) : lh.setUint16(o, v, true));
+    parts.push(new Uint8Array(lh.buffer), name, data);
+    const ch = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, time, 2], [14, date, 2], [16, crc, 4], [20, data.length, 4], [24, data.length, 4], [28, name.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+      .forEach(([o, v, s]) => s === 4 ? ch.setUint32(o, v, true) : ch.setUint16(o, v, true));
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const cdSize = central.reduce((s, c) => s + c.length, 0), end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true); end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: mime || 'application/zip' });
+}
+const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const coreProps = (title, author) => XML + `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${xesc(title)}</dc:title><dc:creator>${xesc(author)}</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString().slice(0, 19)}Z</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString().slice(0, 19)}Z</dcterms:modified></cp:coreProperties>`;
+const appProps = app => XML + `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>${xesc(app)}</Application></Properties>`;
+const hex6 = c => String(c).replace('#', '').toUpperCase();
+
+/* ---------- Word (.docx) : WordprocessingML + groupe de formes DrawingML ---------- */
+function exportDOCX(an) {
+  const td = tableData(an), geo2 = buildGeometry(an, { expandAll: true, ctx: CTX_LIGHT }), org = store.settings.organisation || '';
+  const PORTRAIT = { w: 11906, h: 16838 }, A4L = { w: 16838, h: 11906 }, A3L = { w: 23811, h: 16838 }, MAR = 851;
+  const av = p => ({ w: (p.w - 2 * MAR) * 635, h: (p.h - 2 * MAR - 1400) * 635 });
+  let pgTree = A4L, a = av(A4L), sc = Math.min(1, a.w / (geo2.w * 9525), a.h / (geo2.h * 9525));
+  if (sc < 0.62) { pgTree = A3L; a = av(A3L); sc = Math.min(1, a.w / (geo2.w * 9525), a.h / (geo2.h * 9525)); }
+  const run = (t, o = {}) => {
+    const rp = (o.b ? '<w:b/>' : '') + (o.i ? '<w:i/>' : '') + (o.color ? `<w:color w:val="${o.color}"/>` : '') + (o.sz ? `<w:sz w:val="${o.sz}"/><w:szCs w:val="${o.sz}"/>` : '');
+    return String(t ?? '').split('\n').map((l, i) => (i ? '<w:r><w:br/></w:r>' : '') + `<w:r>${rp ? `<w:rPr>${rp}</w:rPr>` : ''}<w:t xml:space="preserve">${xesc(l)}</w:t></w:r>`).join('');
+  };
+  const para = (t, o = {}) => `<w:p><w:pPr>${o.style ? `<w:pStyle w:val="${o.style}"/>` : ''}${o.pb ? '<w:pageBreakBefore/>' : ''}${o.keep ? '<w:keepNext/>' : ''}${o.after != null ? `<w:spacing w:before="${o.before || 0}" w:after="${o.after}"/>` : ''}${o.jc ? `<w:jc w:val="${o.jc}"/>` : ''}</w:pPr>${run(t, o)}</w:p>`;
+  const cell = (t, w, o = {}) => `<w:tc><w:tcPr><w:tcW w:w="${w}" w:type="dxa"/>${o.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.fill}"/>` : ''}</w:tcPr>${String(t ?? '').split('\n').map(l => `<w:p><w:pPr><w:spacing w:before="20" w:after="20"/></w:pPr>${run(l, { sz: o.sz || 18, b: o.b })}</w:p>`).join('')}</w:tc>`;
+  const table = (cols, rows, o = {}) => {
+    const tot = cols.reduce((s, c) => s + c[1], 0);
+    let x = `<w:tbl><w:tblPr><w:tblW w:w="${tot}" w:type="dxa"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(b => `<w:${b} w:val="single" w:sz="4" w:space="0" w:color="A0A7B0"/>`).join('')}</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="85" w:type="dxa"/><w:right w:w="85" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${cols.map(c => `<w:gridCol w:w="${c[1]}"/>`).join('')}</w:tblGrid>`;
+    if (!o.noHead) x += `<w:tr><w:trPr><w:tblHeader/><w:cantSplit/></w:trPr>${cols.map(c => cell(c[0], c[1], { fill: 'D9DEE4', b: true })).join('')}</w:tr>`;
+    rows.forEach(r => x += `<w:tr><w:trPr><w:cantSplit/></w:trPr>${r.map((v, i) => cell(v, cols[i][1], o.firstColFill && i === 0 ? { fill: 'EEF1F4', b: true } : {})).join('')}</w:tr>`);
+    return x + '</w:tbl>' + para('', { after: 120 });
+  };
+  const sect = (p, land) => `<w:sectPr><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="${p.w}" w:h="${p.h}"${land ? ' w:orient="landscape"' : ''}/><w:pgMar w:top="${MAR}" w:right="${MAR}" w:bottom="${MAR}" w:left="${MAR}" w:header="425" w:footer="425" w:gutter="0"/><w:cols w:space="708"/></w:sectPr>`;
+
+  /* Arbre : groupe de formes Word (wpg) contenant une forme par élément et un tracé par lien */
+  const PX = 9525 * sc, E = v => Math.round(v * PX), W = E(geo2.w), H = E(geo2.h);
+  const hs = v => Math.max(8, Math.round(v * 0.75 * sc * 2));
+  let sid = 10, shapes = '';
+  geo2.edges.forEach(e => {
+    const xs = e.pts.map(p => E(p[0])), ys = e.pts.map(p => E(p[1])), x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(1, Math.max(...xs) - x0), h = Math.max(1, Math.max(...ys) - y0);
+    const pts = e.pts.map((p, i) => `<a:${i ? 'lnTo' : 'moveTo'}><a:pt x="${xs[i] - x0}" y="${ys[i] - y0}"/></a:${i ? 'lnTo' : 'moveTo'}>`).join('');
+    shapes += `<wps:wsp><wps:cNvPr id="${++sid}" name="Lien ${sid}"/><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="${x0}" y="${y0}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="0" t="0" r="r" b="b"/><a:pathLst><a:path w="${w}" h="${h}" fill="none">${pts}</a:path></a:pathLst></a:custGeom><a:noFill/><a:ln w="12700"><a:solidFill><a:srgbClr val="8792A2"/></a:solidFill></a:ln></wps:spPr><wps:bodyPr/></wps:wsp>`;
+  });
+  const tp = (t, o) => `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>${run(t, o)}</w:p>`;
+  geo2.nodes.forEach(I => {
+    const s = I.style, ins = E(G.PAD);
+    const txt = tp(I.typeLines.join(' '), { b: true, color: hex6(s.sub), sz: hs(10.5) }) + tp(I.n.label || '(sans libellé)', { b: I.bold, color: hex6(s.fg), sz: hs(13) }) + (I.meta.length ? metaOf(I.n, an).map(m => tp(m, { color: hex6(s.fg), sz: hs(11) })).join('') : '');
+    shapes += `<wps:wsp><wps:cNvPr id="${++sid}" name="${xesc((I.num || '') + ' ' + TYPE[I.n.type].label)}" descr="${xesc(I.n.label)}"/><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="${E(I.x)}" y="${E(I.y)}"/><a:ext cx="${E(I.w)}" cy="${E(I.h)}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="${hex6(s.fill)}"/></a:solidFill><a:ln w="${I.bold ? 19050 : 12700}"><a:solidFill><a:srgbClr val="${hex6(s.stroke)}"/></a:solidFill>${I.dashed ? '<a:prstDash val="dash"/>' : ''}</a:ln></wps:spPr><wps:txbx><w:txbxContent>${txt}</w:txbxContent></wps:txbx><wps:bodyPr rot="0" vert="horz" wrap="square" lIns="${ins}" tIns="${ins}" rIns="${ins}" bIns="${Math.round(ins / 2)}" anchor="t" anchorCtr="0"><a:noAutofit/></wps:bodyPr></wps:wsp>`;
+  });
+  const drawing = `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${W}" cy="${H}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="Arbre des causes"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/><a:chOff x="0" y="0"/><a:chExt cx="${W}" cy="${H}"/></a:xfrm></wpg:grpSpPr>${shapes}</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:t>Arbre des causes : ouvrir avec Word 2010 ou ultérieur.</w:t></mc:Fallback></mc:AlternateContent></w:r></w:p>`;
+
+  const PW = PORTRAIT.w - 2 * MAR, LW = A4L.w - 2 * MAR;
+  let body = '';
+  body += para(org + (an.site ? ', ' + an.site : ''), { color: '5F6B7A', sz: 20, after: 1800 });
+  body += para('Analyse des causes', { style: 'Title' });
+  body += para(an.numero, { sz: 30, color: '2F3E4D', b: true, after: 60 }) + para(an.titre, { sz: 28, after: 600 });
+  body += table([['Champ', 3400], ['Valeur', PW - 3400]], infoRows(an), { noHead: true, firstColFill: true });
+  body += para('Visas', { style: 'Heading2' });
+  body += table([['', 2200], ['Nom', 3200], ['Date', 2000], ['Visa', PW - 7400]], [['Rédigé par', an.auteur, '', ''], ['Vérifié par', an.validateur, '', ''], ['Approuvé par', '', '', '']]);
+  body += para('1. Description du problème', { style: 'Heading1', pb: true }) + para(an.description || 'Non renseignée.');
+  body += para('Conséquences observées', { style: 'Heading2' }) + para(an.consequences || 'Non renseignées.');
+  body += para('Synthèse', { style: 'Heading2' }) + para(`${td.causes.filter(x => x.n.statut !== 'Écartée').length} cause(s) retenue(s), dont ${td.racines.length} cause(s) racine(s), et ${td.actions.length} action(s).`);
+  body += `<w:p><w:pPr>${sect(PORTRAIT, false)}</w:pPr></w:p>`;
+  body += para('2. Arbre des causes', { style: 'Heading1', keep: true });
+  body += para("Chaque élément est une forme Word modifiable : cliquer sur l'arbre puis sur un élément pour en changer le texte, la couleur ou la position.", { sz: 16, color: '5F6B7A', i: true, after: 120 });
+  body += drawing;
+  body += `<w:p><w:pPr>${sect(pgTree, true)}</w:pPr></w:p>`;
+  body += para('3. Causes identifiées', { style: 'Heading1' });
+  body += table([['N°', 900], ['Type', 1900], ['Famille', 1500], ['Cause', 4100], ['Cause de rang supérieur', 3036], ['Preuve', 2500], ['Statut', LW - 13936]],
+    td.causes.map(({ n }) => [td.num.get(n.id), TYPE[n.type].label, n.famille, n.label, td.parentLabel(n), n.preuve, n.statut]));
+  body += para('4. Causes racines et actions associées', { style: 'Heading1' });
+  body += table([['N°', 1000], ['Cause racine', 5600], ['Famille', 1800], ['Actions', LW - 8400]], td.racines.map(r => [td.num.get(r.n.id), r.n.label, r.n.famille, r.actions.map(x => td.num.get(x.id) + ' ' + x.label).join('\n') || 'Aucune action']));
+  body += para("5. Plan d'actions", { style: 'Heading1' });
+  body += table([['N°', 700], ['Type', 1700], ['Action', 4300], ['Cause traitée', 3036], ['Responsable', 1800], ['Échéance', 1200], ['Statut', 1100], ['Efficacité', LW - 13836]],
+    td.actions.map(({ n }) => [td.num.get(n.id), TYPE[n.type].label, n.label, td.parentLabel(n), n.responsable, fmtDate(n.echeance), actionStatus(n), n.efficacite]));
+  if (an.versions.length) { body += para('6. Historique des versions', { style: 'Heading1' }); body += table([['Version', 1500], ['Date', 2400], ['Auteur', 3000], ['Commentaire', LW - 6900]], an.versions.map(v => ['Version ' + v.n, fmtDateTime(v.date), v.auteur, v.commentaire])); }
+  body += sect(A4L, true);
+
+  const NS = 'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup" xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape" mc:Ignorable="w14 wp14"';
+  const doc = XML + `<w:document ${NS}><w:body>${body}</w:body></w:document>`;
+  const styles = XML + `<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+    <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+    <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="240"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="52"/><w:szCs w:val="52"/></w:rPr></w:style>
+    <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:pBdr><w:bottom w:val="single" w:sz="4" w:space="2" w:color="C3C9D1"/></w:pBdr><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:style>
+    <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:style>
+    <w:style w:type="paragraph" w:styleId="Footer"><w:name w:val="footer"/><w:basedOn w:val="Normal"/><w:rPr><w:color w:val="5F6B7A"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:style>
+    <w:style w:type="table" w:default="1" w:styleId="TableNormal"><w:name w:val="Normal Table"/><w:uiPriority w:val="99"/><w:semiHidden/><w:tblPr><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:left w:w="108" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="108" w:type="dxa"/></w:tblCellMar></w:tblPr></w:style></w:styles>`;
+  const footer = XML + `<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:p><w:pPr><w:pStyle w:val="Footer"/><w:jc w:val="right"/></w:pPr>${run(an.numero + ', ' + an.titre + ', page ')}<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>`;
+  const files = [
+    { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
+    { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
+    { name: 'word/document.xml', data: doc },
+    { name: 'word/styles.xml', data: styles },
+    { name: 'word/footer1.xml', data: footer },
+    { name: 'word/_rels/document.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rIdFtr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/></Relationships>` },
+    { name: 'docProps/core.xml', data: coreProps(an.numero + ' ' + an.titre, an.auteur) },
+    { name: 'docProps/app.xml', data: appProps(APP.nom) }
+  ];
+  download(makeZip(files, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'), fileBase(an) + '.docx');
+  if (sc < 0.6) toast("Arbre de grande taille : réduit dans Word sur une page A3. L'export Visio conserve l'échelle réelle.");
+}
+
+/* ---------- Visio (.vsdx) : une forme par élément, connecteurs collés, données de forme ---------- */
+function exportVSDX(an) {
+  const g = buildGeometry(an, { expandAll: true, ctx: CTX_LIGHT }), num = numbering(an);
+  const IN = v => v / 96, HEAD = 56, PW = IN(Math.max(g.w, 520)), PH = IN(g.h + HEAD), Y = py => PH - IN(py + HEAD);
+  const f = v => String(Math.round(v * 1e6) / 1e6);
+  const cellv = (n, v, extra = '') => `<Cell N="${n}" V="${xesc(v)}"${extra}/>`;
+  const ids = new Map(); let id = 1;
+  g.nodes.forEach(I => ids.set(I.id, ++id));
+  const vmeta = I => {
+    const n = I.n, k = kindOf(n.type);
+    const props = [['Numero', 'Numéro', I.num], ['TypeCause', "Type d'élément", TYPE[n.type].label], ['Libelle', 'Libellé', n.label], ['Famille', 'Famille ' + store.settings.classification, n.famille],
+      ['Description', 'Description', n.description], ['Preuve', 'Preuve', n.preuve], ['Auteur', 'Auteur', n.auteur], ['DateCreation', 'Date de création', fmtDate(isoLocal(new Date(n.createdAt)))],
+      ['Reference', 'Référence associée', n.reference || [an.refRI, an.refFNC, an.refCAPA].filter(Boolean).join(', ')], ['Statut', 'Statut', k === 'action' ? actionStatus(n) : n.statut]];
+    if (k === 'action') props.push(['Responsable', 'Responsable', n.responsable], ['Echeance', 'Échéance', fmtDate(n.echeance)], ['Efficacite', 'Efficacité', n.efficacite]);
+    props.push(['Analyse', 'Analyse', an.numero]);
+    return `<Section N="Property">${props.map(([r, l, v], i) => `<Row N="${r}"><Cell N="Value" V="${xesc(v || '')}" U="STR"/><Cell N="Prompt" V=""/><Cell N="Label" V="${xesc(l)}"/><Cell N="Format" V=""/><Cell N="SortKey" V="${i}"/><Cell N="Type" V="0"/><Cell N="Invisible" V="0"/></Row>`).join('')}</Section>`;
+  };
+  const rect = (w, h) => `<Section N="Geometry" IX="0"><Cell N="NoFill" V="0"/><Cell N="NoLine" V="0"/><Cell N="NoShow" V="0"/><Cell N="NoSnap" V="0"/><Cell N="NoQuickDrag" V="0"/><Row T="MoveTo" IX="1"><Cell N="X" V="0" F="Width*0"/><Cell N="Y" V="0" F="Height*0"/></Row><Row T="LineTo" IX="2"><Cell N="X" V="${f(w)}" F="Width*1"/><Cell N="Y" V="0" F="Height*0"/></Row><Row T="LineTo" IX="3"><Cell N="X" V="${f(w)}" F="Width*1"/><Cell N="Y" V="${f(h)}" F="Height*1"/></Row><Row T="LineTo" IX="4"><Cell N="X" V="0" F="Width*0"/><Cell N="Y" V="${f(h)}" F="Height*1"/></Row><Row T="LineTo" IX="5"><Cell N="X" V="0" F="Geometry1.X1"/><Cell N="Y" V="0" F="Geometry1.Y1"/></Row></Section>`;
+  let conns = '', nodes = '', connects = '';
+  g.edges.forEach(e => {
+    const cid = ++id, a = ids.get(e.from), b = ids.get(e.to);
+    const P = e.pts.map(p => [IN(p[0]), Y(p[1])]), [bx, by] = P[0], [ex, ey] = P[P.length - 1], W = ex - bx, H = ey - by;
+    conns += `<Shape ID="${cid}" NameU="Connecteur.${cid}" Name="Connecteur.${cid}" Type="Shape" LineStyle="0" FillStyle="0" TextStyle="0">`
+      + cellv('PinX', f((bx + ex) / 2), ' F="GUARD((BeginX+EndX)/2)"') + cellv('PinY', f((by + ey) / 2), ' F="GUARD((BeginY+EndY)/2)"')
+      + cellv('Width', f(W), ' F="GUARD(EndX-BeginX)"') + cellv('Height', f(H), ' F="GUARD(EndY-BeginY)"')
+      + cellv('LocPinX', f(W / 2), ' F="GUARD(Width*0.5)"') + cellv('LocPinY', f(H / 2), ' F="GUARD(Height*0.5)"') + cellv('Angle', '0', ' F="GUARD(0DA)"') + cellv('FlipX', '0') + cellv('FlipY', '0')
+      + cellv('BeginX', f(bx), ' F="_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)"') + cellv('BeginY', f(by), ' F="_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)"')
+      + cellv('EndX', f(ex), ' F="_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)"') + cellv('EndY', f(ey), ' F="_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)"')
+      + cellv('BegTrigger', '2', ` F="_XFTRIGGER(Sheet.${a}!EventXFMod)"`) + cellv('EndTrigger', '2', ` F="_XFTRIGGER(Sheet.${b}!EventXFMod)"`)
+      + cellv('ObjType', '2') + cellv('ShapeRouteStyle', '1') + cellv('ConFixedCode', '0') + cellv('ConLineRouteExt', '1') + cellv('ShapePlowCode', '0') + cellv('LayerMember', '')
+      + cellv('LineWeight', '0.01388888888888889', ' U="PT"') + cellv('LineColor', '#8792A2') + cellv('LinePattern', '1') + cellv('BeginArrow', '0') + cellv('EndArrow', '0') + cellv('Rounding', '0')
+      + cellv('NoAlignBox', '1') + cellv('LockHeight', '1') + cellv('LockCalcWH', '1') + cellv('Relationships', '0')
+      + `<Section N="Geometry" IX="0"><Cell N="NoFill" V="1"/><Cell N="NoLine" V="0"/><Cell N="NoShow" V="0"/><Cell N="NoSnap" V="0"/><Cell N="NoQuickDrag" V="0"/>`
+      + P.map((p, i) => `<Row T="${i ? 'LineTo' : 'MoveTo'}" IX="${i + 1}"><Cell N="X" V="${f(p[0] - bx)}"/><Cell N="Y" V="${f(p[1] - by)}"/></Row>`).join('') + `</Section></Shape>`;
+    connects += `<Connect FromSheet="${cid}" FromCell="BeginX" FromPart="9" ToSheet="${a}" ToCell="PinX" ToPart="3"/><Connect FromSheet="${cid}" FromCell="EndX" FromPart="12" ToSheet="${b}" ToCell="PinX" ToPart="3"/>`;
+  });
+  g.nodes.forEach(I => {
+    const s = I.style, w = IN(I.w), h = IN(I.h), sid = ids.get(I.id);
+    const label = I.n.label || '(sans libellé)', meta = metaOf(I.n, an);
+    nodes += `<Shape ID="${sid}" NameU="Element.${sid}" Name="${xesc(I.num || 'Element.' + sid)}" Type="Shape" LineStyle="0" FillStyle="0" TextStyle="0">`
+      + cellv('PinX', f(IN(I.x + I.w / 2))) + cellv('PinY', f(Y(I.y + I.h / 2))) + cellv('Width', f(w)) + cellv('Height', f(h))
+      + cellv('LocPinX', f(w / 2), ' F="Width*0.5"') + cellv('LocPinY', f(h / 2), ' F="Height*0.5"') + cellv('Angle', '0') + cellv('FlipX', '0') + cellv('FlipY', '0') + cellv('ResizeMode', '0')
+      + cellv('LineWeight', I.bold ? '0.02083333333333333' : '0.01388888888888889', ' U="PT"') + cellv('LineColor', s.stroke.toUpperCase()) + cellv('LinePattern', I.dashed ? '2' : '1') + cellv('Rounding', '0.0625', ' U="IN"')
+      + cellv('FillForegnd', s.fill.toUpperCase()) + cellv('FillBkgnd', s.fill.toUpperCase()) + cellv('FillPattern', '1') + cellv('ShdwPattern', '0')
+      + cellv('LeftMargin', f(IN(G.PAD)), ' U="IN"') + cellv('RightMargin', f(IN(G.PAD)), ' U="IN"') + cellv('TopMargin', f(IN(G.PAD - 2)), ' U="IN"') + cellv('BottomMargin', f(IN(4)), ' U="IN"')
+      + cellv('VerticalAlign', '0')
+      + `<Section N="Character"><Row IX="0">${cellv('Font', 'Arial')}${cellv('Color', s.sub.toUpperCase())}${cellv('Style', '1')}${cellv('Size', f(10.5 * 0.75 / 72), ' U="PT"')}</Row>`
+      + `<Row IX="1">${cellv('Font', 'Arial')}${cellv('Color', s.fg.toUpperCase())}${cellv('Style', I.bold ? '1' : '0')}${cellv('Size', f(13 * 0.75 / 72), ' U="PT"')}</Row>`
+      + `<Row IX="2">${cellv('Font', 'Arial')}${cellv('Color', s.fg.toUpperCase())}${cellv('Style', '0')}${cellv('Size', f(11 * 0.75 / 72), ' U="PT"')}</Row></Section>`
+      + `<Section N="Paragraph"><Row IX="0">${cellv('HorzAlign', '0')}${cellv('SpBefore', '0', ' U="PT"')}${cellv('SpAfter', '0', ' U="PT"')}</Row></Section>`
+      + vmeta(I) + rect(w, h)
+      + `<Text><cp IX="0"/>${xesc(I.typeLines.join(' '))}\n<cp IX="1"/>${xesc(label)}${meta.length ? '\n<cp IX="2"/>' + xesc(meta.join('\n')) : ''}</Text></Shape>`;
+  });
+  const titleId = ++id;
+  const title = `<Shape ID="${titleId}" NameU="Titre" Name="Titre" Type="Shape" LineStyle="0" FillStyle="0" TextStyle="0">`
+    + cellv('PinX', f(IN(G.MARGIN) + 3)) + cellv('PinY', f(PH - IN(28))) + cellv('Width', '6') + cellv('Height', f(IN(40))) + cellv('LocPinX', '0', ' F="Width*0"') + cellv('LocPinY', f(IN(20)), ' F="Height*0.5"')
+    + cellv('LinePattern', '0') + cellv('FillPattern', '0') + cellv('VerticalAlign', '1') + cellv('LeftMargin', '0', ' U="IN"')
+    + `<Section N="Character"><Row IX="0">${cellv('Font', 'Arial')}${cellv('Color', '#1F2933')}${cellv('Style', '1')}${cellv('Size', f(11.5 / 72), ' U="PT"')}</Row><Row IX="1">${cellv('Font', 'Arial')}${cellv('Color', '#5F6B7A')}${cellv('Style', '0')}${cellv('Size', f(8.5 / 72), ' U="PT"')}</Row></Section>`
+    + `<Section N="Paragraph"><Row IX="0">${cellv('HorzAlign', '0')}</Row></Section>`
+    + `<Text><cp IX="0"/>${xesc(an.numero + '   ' + an.titre)}\n<cp IX="1"/>${xesc(['Arbre des causes', fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</Text></Shape>`;
+  const VNS = 'xmlns="http://schemas.microsoft.com/office/visio/2012/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xml:space="preserve"';
+  const page = XML + `<PageContents ${VNS}><Shapes>${title}${conns}${nodes}</Shapes>${connects ? `<Connects>${connects}</Connects>` : ''}</PageContents>`;
+  const pages = XML + `<Pages ${VNS}><Page ID="0" NameU="Arbre des causes" Name="Arbre des causes" ViewScale="-1" ViewCenterX="${f(PW / 2)}" ViewCenterY="${f(PH / 2)}"><PageSheet LineStyle="0" FillStyle="0" TextStyle="0">${cellv('PageWidth', f(PW), ' U="IN"')}${cellv('PageHeight', f(PH), ' U="IN"')}${cellv('ShdwOffsetX', '0.125')}${cellv('ShdwOffsetY', '-0.125')}${cellv('PageScale', '1', ' U="IN_F"')}${cellv('DrawingScale', '1', ' U="IN_F"')}${cellv('DrawingSizeType', '0')}${cellv('DrawingScaleType', '0')}${cellv('InhibitSnap', '0')}${cellv('PageLockReplace', '0', ' U="BOOL"')}${cellv('PageLockDuplicate', '0', ' U="BOOL"')}${cellv('UIVisibility', '0')}${cellv('ShdwType', '0')}${cellv('ShdwObliqueAngle', '0')}${cellv('ShdwScaleFactor', '1')}${cellv('DrawingResizeType', '1')}${cellv('PageShapeSplit', '1')}${cellv('RouteStyle', g.orient === 'bas' ? '6' : '7')}${cellv('LineJumpStyle', '0')}</PageSheet><Rel r:id="rId1"/></Page></Pages>`;
+  const charCells = `<Section N="Character"><Row IX="0">${cellv('Font', 'Arial')}${cellv('Color', '0')}${cellv('Style', '0')}${cellv('Case', '0')}${cellv('Pos', '0')}${cellv('FontScale', '1')}${cellv('Size', '0.1388888888888889')}${cellv('DblUnderline', '0')}${cellv('Overline', '0')}${cellv('Strikethru', '0')}${cellv('Letterspace', '0')}${cellv('ColorTrans', '0')}</Row></Section>`;
+  const paraCells = `<Section N="Paragraph"><Row IX="0">${cellv('IndFirst', '0')}${cellv('IndLeft', '0')}${cellv('IndRight', '0')}${cellv('SpLine', '-1.2')}${cellv('SpBefore', '0')}${cellv('SpAfter', '0')}${cellv('HorzAlign', '1')}${cellv('Bullet', '0')}${cellv('BulletStr', '')}</Row></Section>`;
+  const styleSheet = `<StyleSheet ID="0" NameU="No Style" IsCustomNameU="1" Name="No Style" IsCustomName="1">${cellv('EnableLineProps', '1')}${cellv('EnableFillProps', '1')}${cellv('EnableTextProps', '1')}${cellv('HideForApply', '0')}${cellv('LineWeight', '0.01041666666666667')}${cellv('LineColor', '0')}${cellv('LinePattern', '1')}${cellv('Rounding', '0')}${cellv('EndArrowSize', '2')}${cellv('BeginArrow', '0')}${cellv('EndArrow', '0')}${cellv('LineCap', '0')}${cellv('BeginArrowSize', '2')}${cellv('LineColorTrans', '0')}${cellv('CompoundType', '0')}${cellv('FillForegnd', '1')}${cellv('FillBkgnd', '0')}${cellv('FillPattern', '1')}${cellv('ShdwForegnd', '0')}${cellv('ShdwPattern', '0')}${cellv('FillForegndTrans', '0')}${cellv('FillBkgndTrans', '0')}${cellv('ShdwForegndTrans', '0')}${cellv('LeftMargin', '0')}${cellv('RightMargin', '0')}${cellv('TopMargin', '0')}${cellv('BottomMargin', '0')}${cellv('VerticalAlign', '1')}${cellv('DefaultTabStop', '0.5')}${cellv('TextDirection', '0')}${cellv('TextBkgndTrans', '0')}${cellv('LockWidth', '0')}${cellv('LockHeight', '0')}${cellv('LockMoveX', '0')}${cellv('LockMoveY', '0')}${cellv('LockAspect', '0')}${cellv('LockDelete', '0')}${cellv('LockBegin', '0')}${cellv('LockEnd', '0')}${cellv('LockRotate', '0')}${cellv('LockCrop', '0')}${cellv('LockVtxEdit', '0')}${cellv('LockTextEdit', '0')}${cellv('LockFormat', '0')}${cellv('LockGroup', '0')}${cellv('LockCalcWH', '0')}${cellv('LockSelect', '0')}${cellv('LockCustProp', '0')}${cellv('NoObjHandles', '0')}${cellv('NonPrinting', '0')}${cellv('NoCtlHandles', '0')}${cellv('NoAlignBox', '0')}${cellv('UpdateAlignBox', '0')}${cellv('HideText', '0')}${cellv('DynFeedback', '0')}${cellv('GlueType', '0')}${cellv('WalkPreference', '0')}${cellv('BegTrigger', '0', ' F="No Formula"')}${cellv('EndTrigger', '0', ' F="No Formula"')}${cellv('ObjType', '0')}${cellv('Comment', '')}${cellv('IsDropSource', '0')}${cellv('NoLiveDynamics', '0')}${cellv('LocalizeMerge', '0')}${cellv('NoProofing', '0')}${cellv('Calendar', '0')}${cellv('LangID', 'fr-FR')}${cellv('ShapeKeywords', '')}${cellv('DropOnPageScale', '1')}${charCells}${paraCells}</StyleSheet>`;
+  const docXml = XML + `<VisioDocument ${VNS}><DocumentSettings TopPage="0" DefaultTextStyle="0" DefaultLineStyle="0" DefaultFillStyle="0" DefaultGuideStyle="0"><GlueSettings>9</GlueSettings><SnapSettings>65847</SnapSettings><SnapExtensions>34</SnapExtensions><SnapAngles/><DynamicGridEnabled>1</DynamicGridEnabled><ProtectStyles>0</ProtectStyles><ProtectShapes>0</ProtectShapes><ProtectMasters>0</ProtectMasters><ProtectBkgnds>0</ProtectBkgnds></DocumentSettings><Colors><ColorEntry IX="0" RGB="#000000"/><ColorEntry IX="1" RGB="#FFFFFF"/></Colors><FaceNames><FaceName NameU="Arial" UnicodeRanges="-536859905 -1073711037 9 0" CharSets="1073742335 -65536" Panose="2 11 6 4 2 2 2 2 2 4" Flags="325"/></FaceNames><StyleSheets>${styleSheet}</StyleSheets><DocumentSheet NameU="TheDoc" IsCustomNameU="1" Name="TheDoc" IsCustomName="1" LineStyle="0" FillStyle="0" TextStyle="0">${cellv('OutputFormat', '0')}${cellv('LockPreview', '0')}${cellv('AddMarkup', '0')}${cellv('ViewMarkup', '0')}${cellv('DocLockReplace', '0', ' U="BOOL"')}${cellv('NoCoauth', '0', ' U="BOOL"')}${cellv('DocLockDuplicatePage', '0', ' U="BOOL"')}${cellv('PreviewQuality', '0')}${cellv('PreviewScope', '0')}${cellv('DocLangID', 'fr-FR')}</DocumentSheet></VisioDocument>`;
+  const files = [
+    { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/visio/document.xml" ContentType="application/vnd.ms-visio.drawing.main+xml"/><Override PartName="/visio/pages/pages.xml" ContentType="application/vnd.ms-visio.pages+xml"/><Override PartName="/visio/pages/page1.xml" ContentType="application/vnd.ms-visio.page+xml"/><Override PartName="/visio/windows.xml" ContentType="application/vnd.ms-visio.windows+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
+    { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.microsoft.com/visio/2010/relationships/document" Target="visio/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
+    { name: 'visio/document.xml', data: docXml },
+    { name: 'visio/_rels/document.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.microsoft.com/visio/2010/relationships/pages" Target="pages/pages.xml"/><Relationship Id="rId2" Type="http://schemas.microsoft.com/visio/2010/relationships/windows" Target="windows.xml"/></Relationships>` },
+    { name: 'visio/windows.xml', data: XML + `<Windows ClientWidth="1600" ClientHeight="900" ${VNS}><Window ID="0" WindowType="Drawing" WindowState="1073741824" WindowLeft="-8" WindowTop="-31" WindowWidth="1616" WindowHeight="939" ContainerType="Page" Page="0" ViewScale="-1" ViewCenterX="${f(PW / 2)}" ViewCenterY="${f(PH / 2)}"><ShowRulers>1</ShowRulers><ShowGrid>0</ShowGrid><ShowPageBreaks>0</ShowPageBreaks><ShowGuides>1</ShowGuides><ShowConnectionPoints>1</ShowConnectionPoints><GlueSettings>9</GlueSettings><SnapSettings>65847</SnapSettings><SnapExtensions>34</SnapExtensions><SnapAngles/><DynamicGridEnabled>1</DynamicGridEnabled><TabSplitterPos>0.5</TabSplitterPos></Window></Windows>` },
+    { name: 'visio/pages/pages.xml', data: pages },
+    { name: 'visio/pages/_rels/pages.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.microsoft.com/visio/2010/relationships/page" Target="page1.xml"/></Relationships>` },
+    { name: 'visio/pages/page1.xml', data: page },
+    { name: 'docProps/core.xml', data: coreProps(an.numero + ' ' + an.titre, an.auteur) },
+    { name: 'docProps/app.xml', data: appProps('Microsoft Visio') }
+  ];
+  download(makeZip(files, 'application/vnd.ms-visio.drawing'), fileBase(an) + '.vsdx');
+}
+
+/* ---------- Excel (.xlsx) : SpreadsheetML minimal ---------- */
+function makeXLSX(sheets) {
+  const colL = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const sheetXml = sh => {
+    const rows = [sh.cols.map(c => c[0]), ...sh.rows];
+    let x = XML + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"${sh.kv ? '' : ''}><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${sh.cols.map((c, i) => `<col min="${i + 1}" max="${i + 1}" width="${c[1]}" customWidth="1"/>`).join('')}</cols><sheetData>`;
+    rows.forEach((r, ri) => {
+      x += `<row r="${ri + 1}">`;
+      r.forEach((v, ci) => {
+        const ref = colL(ci) + (ri + 1), st = ri === 0 ? 1 : 2;
+        if (v === null || v === undefined || v === '') x += `<c r="${ref}" s="${st}"/>`;
+        else if (typeof v === 'number' && isFinite(v)) x += `<c r="${ref}" s="${st}"><v>${v}</v></c>`;
+        else x += `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
+      });
+      x += '</row>';
+    });
+    x += `</sheetData>${rows.length > 1 && !sh.kv ? `<autoFilter ref="A1:${colL(sh.cols.length - 1)}${rows.length}"/>` : ''}<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup orientation="landscape" paperSize="9"/></worksheet>`;
+    return x;
+  };
+  const safe = n => n.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31);
+  const files = [
+    { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
+    { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
+    { name: 'xl/workbook.xml', data: XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${xesc(safe(s.name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>` },
+    { name: 'xl/_rels/workbook.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: 'xl/styles.xml', data: XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9DEE4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFC3C9D1"/></left><right style="thin"><color rgb="FFC3C9D1"/></right><top style="thin"><color rgb="FFC3C9D1"/></top><bottom style="thin"><color rgb="FFC3C9D1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
+    ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(s) })),
+    { name: 'docProps/core.xml', data: coreProps(APP.nom, store.settings.auteur) },
+    { name: 'docProps/app.xml', data: appProps('Microsoft Excel') }
+  ];
+  return makeZip(files, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+/* Lignes à plat : une ligne par nœud, avec l'identifiant du parent (liens hiérarchiques) */
+function flatRows(an, withAnalysis) {
+  const td = tableData(an), pre = withAnalysis ? [an.numero] : [];
+  const causes = td.ordered.map(({ n, d }) => [...pre, td.num.get(n.id), n.parentId ? td.num.get(n.parentId) : '', d, TYPE[n.type].label, kindOf(n.type) === 'action' ? 'Action' : kindOf(n.type) === 'event' ? 'Événement' : 'Cause',
+    n.label, n.famille, kindOf(n.type) === 'action' ? actionStatus(n) : n.statut, n.preuve, n.description, n.responsable, fmtDate(n.echeance), n.efficacite, n.reference, n.auteur, fmtDate(isoLocal(new Date(n.createdAt))), n.id, n.parentId || '']);
+  return { td, causes };
+}
+const NODE_COLS = [['N°', 9], ['N° parent', 10], ['Niveau', 8], ['Type', 22], ['Nature', 11], ['Libellé', 60], ['Famille', 15], ['Statut', 13], ['Preuve', 36], ['Commentaire', 36], ['Responsable', 20], ['Échéance', 12], ['Efficacité', 13], ['Référence', 16], ['Auteur', 18], ['Créé le', 12], ['Identifiant', 38], ['Identifiant parent', 38]];
+function exportXLSX(an) {
+  const { td, causes } = flatRows(an, false);
+  const sheets = [
+    { name: 'Dossier', kv: true, cols: [['Champ', 28], ['Valeur', 90]], rows: [...infoRows(an), ['Description du problème', an.description], ['Conséquences observées', an.consequences]] },
+    { name: 'Arbre', cols: NODE_COLS, rows: causes },
+    { name: 'Causes racines', cols: [['N°', 9], ['Cause racine', 60], ['Famille', 15], ['Actions associées', 70]], rows: td.racines.map(r => [td.num.get(r.n.id), r.n.label, r.n.famille, r.actions.map(x => td.num.get(x.id) + ' ' + x.label).join('\n')]) },
+    { name: "Plan d'actions", cols: [['N°', 8], ['Type', 20], ['Action', 60], ['Cause traitée', 50], ['Responsable', 20], ['Échéance', 12], ['Statut', 13], ['Efficacité', 13], ['Référence', 16]],
+      rows: td.actions.map(({ n }) => [td.num.get(n.id), TYPE[n.type].label, n.label, td.parentLabel(n), n.responsable, fmtDate(n.echeance), actionStatus(n), n.efficacite, n.reference]) }
+  ];
+  if (an.versions.length) sheets.push({ name: 'Versions', cols: [['Version', 10], ['Date', 18], ['Auteur', 22], ['Commentaire', 70]], rows: an.versions.map(v => [v.n, fmtDateTime(v.date), v.auteur, v.commentaire]) });
+  download(makeXLSX(sheets), fileBase(an) + '.xlsx');
+}
+function exportBaseXLSX() {
+  const A = store.analyses; if (!A.length) { toast('Aucune analyse à exporter.'); return; }
+  const anRows = A.map(a => [a.numero, a.titre, fmtDate(a.date), a.site, a.processus, a.gravite, a.refRI, a.refFNC, a.refCAPA, a.refAutre, a.auteur, a.validateur, a.statut, a.modele ? 'Oui' : 'Non', a.versions.length, a.description, a.consequences, fmtDateTime(a.createdAt), fmtDateTime(a.updatedAt), a.id]);
+  const nodeRows = A.flatMap(a => flatRows(a, true).causes);
+  download(makeXLSX([
+    { name: 'Analyses', cols: [['Numéro', 14], ['Titre', 50], ['Date', 12], ['Site', 16], ['Processus', 22], ['Gravité', 13], ['RI', 14], ['FNC', 14], ['CAPA', 14], ['Autre référence', 18], ['Auteur', 18], ['Validateur', 18], ['Statut', 13], ['Modèle', 8], ['Versions', 9], ['Description', 60], ['Conséquences', 40], ['Créée le', 16], ['Modifiée le', 16], ['Identifiant', 38]], rows: anRows },
+    { name: 'Éléments', cols: [['Analyse', 14], ...NODE_COLS], rows: nodeRows },
+    { name: 'Bibliothèque', cols: [['Type', 22], ['Famille', 16], ['Libellé', 60]], rows: store.library.map(l => [TYPE[l.type]?.label || l.type, l.famille, l.label]) }
+  ]), `base-arbres-des-causes_${isoLocal()}.xlsx`);
+}
+function exportRexXLSX() {
+  const d = $('#view-rex')._data; if (!d) return;
+  const famRows = {}; d.causes.forEach(c => { const f = c.n.famille || 'Non renseignée'; famRows[f] = famRows[f] || [f, 0, 0]; famRows[f][1]++; if (c.n.type === 'racine') famRows[f][2]++; });
+  download(makeXLSX([
+    { name: 'Causes récurrentes', cols: [['Cause', 60], ['Occurrences', 12], ['Nb analyses', 12], ['Analyses', 40], ['Familles', 30], ['Processus', 40], ['Issue de la bibliothèque', 14]],
+      rows: d.clusters.map(c => { const an = [...new Set(c.items.map(i => i.a))]; return [c.label, c.items.length, an.length, an.map(a => a.numero).join(', '), [...new Set(c.items.map(i => i.n.famille).filter(Boolean))].join(', '), [...new Set(an.map(a => a.processus).filter(Boolean))].join(', '), c.ref ? 'Oui' : 'Non']; }) },
+    { name: 'Familles', cols: [['Famille', 24], ['Causes retenues', 16], ['Causes racines', 16]], rows: Object.values(famRows) },
+    { name: 'Actions', cols: [['Analyse', 14], ['Action', 60], ['Type', 20], ['Responsable', 20], ['Échéance', 12], ['Statut', 13], ['Efficacité', 13]],
+      rows: d.actions.map(x => [x.a.numero, x.n.label, TYPE[x.n.type].label, x.n.responsable, fmtDate(x.n.echeance), actionStatus(x.n), x.n.efficacite]) }
+  ]), `synthese-rex_${isoLocal()}.xlsx`);
+}
+
+/* =====================================================================
+   INITIALISATION
+   ===================================================================== */
+initStore();
+applyTheme();
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (store.settings.theme === 'auto') applyTheme(); });
+updateFoot();
+const last = store.settings.lastId && store.analyses.find(a => a.id === store.settings.lastId);
+if (last) { currentId = last.id; selectedId = rootOf(last)?.id; updateHeader(); }
+showView('list');
+window.addEventListener('resize', debounce(() => { if (activeView === 'editor' && geo && !geo.nodes.length) fitView(); }, 200));
+window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); Storage.save(store); });
+</script>
+</body>
+</html>
