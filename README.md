@@ -11,6 +11,7 @@ restent sur le poste de l'utilisateur.
 |----|-------|-------|---------|
 | 01 | **Arbre des causes** | Analyse de causes (5M / 8M), contrôle de l'analyse, bibliothèque de causes, retour d'expérience. Exports PDF, Word, Visio, Excel, SVG, PNG. | [`outils/arbre-des-causes/`](outils/arbre-des-causes/) |
 | 02 | **Audit interne ISO 19443** | Préparation, plan d'audit, checklist terrain, constats, vérification avant émission et rapport Word ou PDF. Référentiel ISO 9001 / ISO 19443 intégré, import Excel / CSV. | [`outils/audit-iso19443/`](outils/audit-iso19443/) |
+| 03 | **Visite terrain Gemba** | Gemba walk qualité et sûreté sur téléphone : grille de 67 points en 15 thèmes, photos, suites données aux écarts, compte rendu Word ou PDF, pilotage multi-visites et export Excel. | [`outils/visite-gemba/`](outils/visite-gemba/) |
 
 ## Utilisation
 
@@ -19,7 +20,9 @@ restent sur le poste de l'utilisateur.
   Chrome ou Firefox.
 - **Sauvegarde et partage** : chaque outil exporte et importe sa base en JSON.
 
-Aucune donnée n'est envoyée : tout est stocké dans le `localStorage` du navigateur.
+Par défaut, aucune donnée n'est envoyée : tout est stocké dans le navigateur (`localStorage`,
+et IndexedDB pour les photos de la visite Gemba). Seule exception, facultative : la visite
+Gemba peut envoyer ses comptes rendus vers un flux Power Automate configuré par l'organisation.
 
 ## Structure
 
