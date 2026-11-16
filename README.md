@@ -24,6 +24,23 @@ Par défaut, aucune donnée n'est envoyée : tout est stocké dans le navigateur
 et IndexedDB pour les photos de la visite Gemba). Seule exception, facultative : la visite
 Gemba peut envoyer ses comptes rendus vers un flux Power Automate configuré par l'organisation.
 
+## Langues
+
+Le site et les outils s'affichent en français ou en anglais. Le bouton **FR / EN** de
+l'en-tête change la langue ; le choix est mémorisé dans le navigateur et partagé entre le
+site et les outils. Sans choix enregistré, la langue suit celle du navigateur. Un lien peut
+imposer la langue : ajouter `?lang=en` ou `?lang=fr` à l'adresse.
+
+Les textes sont écrits en français dans les pages ; la traduction anglaise se trouve :
+
+- pour le site, dans `assets/i18n.js` ;
+- pour chaque outil, dans le bloc « LANGUE » en tête de son script (`I18N_EN` pour les
+  textes fixes, `I18N_RX` pour les phrases avec nombres ou noms).
+
+Ajouter ou modifier un texte français demande d'ajouter sa traduction au même endroit, sinon
+il reste en français dans la version anglaise. Les exports (Word, Excel, PDF, Visio) suivent
+la langue choisie ; les données déjà saisies ne sont pas traduites.
+
 ## Deux points d'entrée
 
 | Adresse | Contenu | Usage |
@@ -42,7 +59,7 @@ index.html              accueil avec profil : catalogue + auteur
 outils/index.html       accueil sans profil : catalogue seul
 outils/<outil>/         un dossier par outil (index.html autonome)
 profil/                 profil et réalisations de l'auteur
-assets/                 feuille de style, script et icônes communs au site
+assets/                 feuille de style, script, traduction (i18n.js) et icônes communs au site
 ```
 
 Pour ajouter un outil : déposer son fichier dans `outils/<nom>/index.html`, puis ajouter

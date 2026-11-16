@@ -18,6 +18,20 @@
     document.documentElement.setAttribute('data-theme', t);
   })();
 </script>
+<script>
+  /* Langue partagée avec le site (clé 'lang', ou ?lang=en dans l'adresse) ; anglais si le navigateur n'est pas en français */
+  (function () {
+    var q = /[?&]lang=(fr|en)\b/.exec(location.search), s = null;
+    try { if (q) localStorage.setItem('lang', q[1]); s = localStorage.getItem('lang'); } catch (e) { /* stockage bloqué */ }
+    var l = s === 'fr' || s === 'en' ? s : q ? q[1] : (/^fr\b/i.test(navigator.language || 'fr') ? 'fr' : 'en');
+    window.LANG = l;
+    document.documentElement.lang = l;
+    if (l === 'en') {
+      document.documentElement.classList.add('i18n-wait');
+      var st = document.createElement('style'); st.textContent = '.i18n-wait body{visibility:hidden}'; document.head.appendChild(st);
+    }
+  })();
+</script>
 <!--
   Visite terrain (Gemba) qualité et sûreté nucléaire, atelier et bureau.
   Fichier unique, sans dépendance. Les données restent sur l'appareil (stockage local du navigateur,
@@ -359,6 +373,892 @@ table.tbl tr.click:hover td{background:var(--hover)}
 <input type="file" id="file-ref" accept=".xlsx,.csv,text/csv" hidden>
 <input type="file" id="file-ann" accept=".xlsx,.csv,text/csv" hidden>
 <script>
+/* =====================================================================
+   LANGUE (FR / EN)
+   Le choix est partagé avec le site (localStorage 'lang', ou ?lang=en dans l'adresse).
+   L'interface est écrite en français. En anglais, chaque texte affiché dont le français
+   figure dans I18N_EN (ou correspond à un motif de I18N_RX) est remplacé à l'affichage ;
+   les codes enregistrés (évaluations, suites, statuts) ne changent pas. Une base créée en
+   anglais reçoit la grille, les thèmes et les zones par défaut en anglais.
+   Les exports passent par T() (texte, PDF) et trMarkup() (XML Word et Excel).
+   Ajouter un texte français à l'interface = ajouter sa traduction ici.
+   ===================================================================== */
+const I18N_EN = {
+  /* thèmes, zones et grille par défaut */
+  "Culture de sûreté et attitude interrogative": "Safety culture and questioning attitude",
+  "Pratiques de fiabilisation": "Human performance tools",
+  "Documents de travail": "Work documents",
+  "Enregistrements et intégrité des données": "Records and data integrity",
+  "Identification et traçabilité": "Identification and traceability",
+  "Points d'arrêt et contrôles": "Hold points and inspections",
+  "Procédés spéciaux": "Special processes",
+  "Moyens de mesure": "Measuring equipment",
+  "Propreté, corps étrangers et conservation": "Cleanliness, foreign material and preservation",
+  "Produits non conformes et écarts": "Nonconforming products and gaps",
+  "CFSI (contrefaçons, falsifications, suspicions)": "CFSI (counterfeit, fraudulent and suspect items)",
+  "Compétences et habilitations": "Competence and authorisations",
+  "Exigences client et modifications": "Customer requirements and changes",
+  "Achats et sous-traitance": "Purchasing and subcontracting",
+  "Organisation du poste et management visuel": "Workstation organisation and visual management",
+  "Observations hors grille": "Observations outside the checklist",
+  "Réception et magasin": "Receiving and store",
+  "Débit et usinage": "Cutting and machining",
+  "Soudage": "Welding",
+  "Montage": "Assembly",
+  "Contrôle et métrologie": "Inspection and metrology",
+  "Banc d'essai": "Test bench",
+  "Peinture, conditionnement et expédition": "Painting, packing and shipping",
+  "Bureau d'études": "Design office",
+  "Méthodes et industrialisation": "Methods and industrialisation",
+  "Achats et approvisionnement": "Purchasing and procurement",
+  "Gestion de projet": "Project management",
+  "Planification et ordonnancement": "Planning and scheduling",
+  "Qualité": "Quality",
+
+  "Les personnes s'arrêtent et demandent quand une situation ne correspond pas à ce qui est prévu": "People stop and ask when a situation does not match what was planned",
+  "Réaction face à un plan, une pièce ou une consigne qui ne colle pas ; exemples récents d'arrêt sur doute": "Reaction to a drawing, part or instruction that does not fit; recent examples of stopping when in doubt",
+  "Que fais-tu si quelque chose ne correspond pas à ce que tu attends (plan, gamme, pièce, consigne) ?": "What do you do if something does not match what you expect (drawing, routing, part, instruction)?",
+  "Les personnes savent à qui signaler un écart ou une anomalie, et le font sans crainte": "People know who to report a gap or anomaly to, and do so without fear",
+  "Connaissance du circuit de remontée, signalements récents, absence de reproche après un signalement": "Knowledge of the reporting channel, recent reports, no blame after a report",
+  "Quand as-tu signalé un problème pour la dernière fois ? Comment ça s'est passé ensuite ?": "When did you last report a problem? What happened next?",
+  "Les personnes connaissent la destination nucléaire du produit et ce que leur activité apporte à la sûreté": "People know the product is going to a nuclear plant and how their work contributes to safety",
+  "Lien fait entre l'opération réalisée et la fonction de la pompe une fois installée": "Link made between the operation performed and the function of the pump once installed",
+  "À quoi sert cette pièce une fois en service ? Que se passerait-il si ce défaut passait ?": "What does this part do once in service? What would happen if this defect got through?",
+  "La pression du délai ne conduit pas à sauter une étape, un contrôle ou un enregistrement": "Schedule pressure does not lead to skipping a step, an inspection or a record",
+  "Opérations faites en avance sur la gamme, contrôles reportés, « on régularisera après »": "Operations done ahead of the routing, postponed inspections, “we'll sort it out later”",
+  "T'est-il déjà arrivé de devoir choisir entre tenir le délai et faire l'opération comme prévu ?": "Have you ever had to choose between meeting the deadline and doing the operation as planned?",
+  "Les retours d'expérience récents (événements, FNC, REX client) sont connus et partagés": "Recent lessons learned (events, NCRs, customer feedback) are known and shared",
+  "Affichage REX, sujet abordé en point d'équipe, connaissance des derniers événements du site": "Lessons learned display, topic covered in team meetings, knowledge of the site's latest events",
+  "Quel est le dernier REX ou incident dont on t'a parlé ? Qu'est-ce que ça a changé pour toi ?": "What is the last lesson learned or incident you were told about? What did it change for you?",
+  "Les remontées précédentes ont reçu une réponse (boucle fermée)": "Previous reports received an answer (closed loop)",
+  "Retour fait à l'émetteur d'une remontée, délai de réponse, sujets restés sans suite": "Feedback given to whoever raised the issue, response time, topics left without follow-up",
+  "Le dernier problème que tu as remonté a-t-il été traité ? As-tu eu un retour ?": "Was the last problem you raised dealt with? Did you get feedback?",
+  "Un pré-job briefing est fait avant les opérations sensibles, inhabituelles ou réalisées pour la première fois": "A pre-job briefing is held before sensitive, unusual or first-time operations",
+  "Opérations sur pièces importantes pour la sûreté, reprises, premières fabrications, opérations rares": "Operations on safety-important parts, rework, first builds, rare operations",
+  "Avant cette opération, qu'avez-vous partagé sur les risques et les points de vigilance ?": "Before this operation, what did you share about the risks and the points to watch?",
+  "L'autocontrôle est pratiqué et tracé avant de passer à l'étape suivante": "Self-checking is done and recorded before moving to the next step",
+  "Valeurs réellement relevées et non simplement « OK », autocontrôles remplis au moment de l'opération": "Values actually recorded rather than just “OK”, self-checks filled in at the time of the operation",
+  "Montre-moi ce que tu vérifies avant de considérer ton opération terminée.": "Show me what you check before you consider your operation finished.",
+  "Le contrôle croisé ou la vérification indépendante est appliqué là où il est requis": "Peer checking or independent verification is applied where required",
+  "Deux visas de personnes différentes, vérificateur réellement présent ou ayant revu les données": "Two sign-offs from different people, checker actually present or having reviewed the data",
+  "Qui vérifie ce point, à quel moment, et avec quels éléments ?": "Who checks this point, when, and with what information?",
+  "Les informations critiques sont transmises de façon sécurisée (reformulation, confirmation, passation écrite)": "Critical information is passed on safely (repeat-back, confirmation, written handover)",
+  "Consignes orales reformulées, valeurs répétées, passation entre équipes sur une pièce en cours": "Oral instructions repeated back, values read back, handover between shifts on a part in progress",
+  "Comment se passe la passation entre équipes sur une pièce en cours ?": "How does the handover between shifts work on a part in progress?",
+  "Une minute d'arrêt est observée avant une opération irréversible": "A one-minute pause is taken before an irreversible operation",
+  "Vérification avant usinage final, soudure, perçage, serrage au couple, mise en pression": "Check before final machining, welding, drilling, torque tightening, pressurisation",
+  "Avant une opération qu'on ne peut pas rattraper, que vérifies-tu ?": "Before an operation that cannot be undone, what do you check?",
+  "Un débriefing suit les opérations sensibles et les enseignements sont remontés": "A debrief follows sensitive operations and the lessons are passed on",
+  "Trace du débriefing, difficultés rencontrées remontées aux méthodes ou à la qualité": "Record of the debrief, difficulties reported to methods or quality",
+  "Qu'avez-vous retenu de la dernière opération difficile ? Où est-ce noté ?": "What did you learn from the last difficult operation? Where is it written down?",
+  "Les documents utilisés (plans, gammes, modes opératoires, procédures) sont à l'indice en vigueur": "The documents used (drawings, routings, work instructions, procedures) are at the current revision",
+  "Indice du plan au poste comparé à celui de l'OF ou du système documentaire": "Revision of the drawing at the workstation compared with the work order or the document system",
+  "Comment sais-tu que ce document est le bon indice ?": "How do you know this document is the right revision?",
+  "Aucune copie non maîtrisée, annotation personnelle ou document périmé n'est utilisé": "No uncontrolled copy, personal annotation or obsolete document is used",
+  "Photocopies annotées, anciens indices, aide-mémoire non validés, fichiers enregistrés en local": "Annotated photocopies, old revisions, unapproved crib sheets, files saved locally",
+  "As-tu des notes ou des documents à toi pour faire ce travail ? Lesquels ?": "Do you have your own notes or documents for this work? Which ones?",
+  "Le dossier de fabrication (OF, gamme, dossier de suivi) accompagne la pièce et lui correspond": "The manufacturing file (work order, routing, traveller) goes with the part and matches it",
+  "Concordance entre numéro de pièce, numéro de série, OF et dossier": "Match between part number, serial number, work order and file",
+  "Où est le dossier de cette pièce ? Comment fais-tu le lien entre les deux ?": "Where is the file for this part? How do you link the two?",
+  "Les instructions sont comprises et appliquées telles qu'écrites ; un décalage est signalé, pas contourné": "Instructions are understood and followed as written; a mismatch is reported, not worked around",
+  "Écart entre le travail prescrit et le travail réel, astuces non écrites": "Gap between work as prescribed and work as done, unwritten tricks",
+  "Y a-t-il une étape que tu fais autrement que ce qui est écrit ? Pourquoi ?": "Is there a step you do differently from what is written? Why?",
+  "Les documents émis sont vérifiés et approuvés avant diffusion par une autre personne que le rédacteur": "Documents issued are checked and approved before distribution by someone other than the author",
+  "Circuit de vérification et d'approbation, visas, documents diffusés en projet": "Checking and approval circuit, sign-offs, documents distributed as drafts",
+  "Qui relit et approuve ce que tu émets avant diffusion ?": "Who reviews and approves what you issue before distribution?",
+  "Les enregistrements sont remplis au fil de l'eau, jamais anticipés ni complétés après coup": "Records are filled in as work progresses, never in advance or after the fact",
+  "Cases remplies pour des opérations pas encore faites, signatures groupées en fin de poste": "Boxes filled in for operations not yet done, sign-offs batched at the end of the shift",
+  "À quel moment remplis-tu cette fiche ?": "When do you fill in this form?",
+  "Chaque visa est apposé par la personne qui a réalisé ou vérifié l'opération": "Each sign-off is made by the person who performed or checked the operation",
+  "Visa pour un collègue absent, tampon ou identifiant partagé, mot de passe connu de plusieurs personnes": "Sign-off for an absent colleague, shared stamp or login, password known to several people",
+  "Si ton collègue a fait l'opération et n'est pas là, que fais-tu pour la fiche ?": "If your colleague did the operation and is not here, what do you do about the form?",
+  "Les corrections restent lisibles et sont tracées (barré lisible, date, visa), sans effaceur ni surcharge": "Corrections remain legible and are traced (legible strike-through, date, sign-off), with no correction fluid or overwriting",
+  "Correcteur blanc, ratures illisibles, chiffres réécrits par-dessus": "Correction fluid, illegible crossings-out, figures written over",
+  "Comment corriges-tu une valeur que tu as mal écrite ?": "How do you correct a value you wrote down wrongly?",
+  "Les valeurs enregistrées sont réellement mesurées et cohérentes avec le moyen utilisé": "Recorded values are actually measured and consistent with the instrument used",
+  "Résolution incompatible avec l'instrument, valeurs identiques répétées, valeurs toujours au nominal": "Resolution inconsistent with the instrument, identical values repeated, values always at nominal",
+  "Avec quel instrument as-tu mesuré cette valeur ?": "Which instrument did you use to measure this value?",
+  "Les données des systèmes (SAP, Fabasoft, fichiers partagés) ne peuvent pas être modifiées sans trace": "Data in systems (SAP, Fabasoft, shared files) cannot be changed without a trace",
+  "Fichiers Excel partagés sans historique, droits d'accès trop larges, comptes génériques": "Shared Excel files with no history, access rights too broad, generic accounts",
+  "Qui peut modifier ce fichier ? Voit-on qui a changé quoi ?": "Who can change this file? Can you see who changed what?",
+  "Chaque pièce, sous-ensemble et matière est identifié et rattaché à son OF ou à son lot": "Each part, sub-assembly and material is identified and linked to its work order or batch",
+  "Étiquettes, marquages, fiches suiveuses ; pièces sans identification sur établi ou en rack": "Labels, markings, travellers; unidentified parts on benches or racks",
+  "À quel OF appartient cette pièce ? Comment le sais-tu ?": "Which work order does this part belong to? How do you know?",
+  "Les pièces destinées au nucléaire sont repérables et distinguées des autres productions": "Parts intended for nuclear use can be spotted and are kept apart from other production",
+  "Signalétique spécifique, zones ou bacs dédiés, mélange avec des pièces d'autres affaires": "Specific signage, dedicated areas or bins, mixing with parts from other jobs",
+  "Comment sait-on que cette pièce part en centrale nucléaire ?": "How do we know this part is going to a nuclear power plant?",
+  "Le transfert de marquage (numéro de coulée, repère pièce) est fait avant débit ou usinage et il est tracé": "Marking transfer (heat number, part mark) is done before cutting or machining and is recorded",
+  "Report des repères matière sur chaque pièce débitée, visa du transfert": "Material marks carried over to each cut piece, transfer signed off",
+  "Quand tu coupes cette barre, comment gardes-tu le numéro de coulée sur chaque morceau ?": "When you cut this bar, how do you keep the heat number on each piece?",
+  "L'état de contrôle de chaque pièce est visible (à contrôler, acceptée, refusée)": "The inspection status of each part is visible (to inspect, accepted, rejected)",
+  "Étiquettes de statut, zones d'attente de contrôle, pièces sans statut": "Status labels, areas awaiting inspection, parts without a status",
+  "Cette pièce a-t-elle déjà été contrôlée ? Où le vois-tu ?": "Has this part already been inspected? Where can you see that?",
+  "Les matières et composants utilisés correspondent au certificat et à la nomenclature": "The materials and components used match the certificate and the bill of materials",
+  "Nuance, numéro de coulée, certificat 3.1 ou 3.2 disponible et cohérent avec le marquage": "Grade, heat number, 3.1 or 3.2 certificate available and consistent with the marking",
+  "Où trouves-tu le certificat de cette matière ?": "Where do you find the certificate for this material?",
+  "Aucune opération ne franchit un point d'arrêt sans levée formelle": "No operation passes a hold point without formal release",
+  "Points d'arrêt et points de notification client dans la gamme, levées signées et datées avant la suite": "Customer hold and notification points in the routing, releases signed and dated before continuing",
+  "Quels sont les points d'arrêt sur cette pièce ? Qui les lève et comment le sais-tu ?": "What are the hold points on this part? Who releases them and how do you know?",
+  "Les contrôles prévus sont faits à l'étape prévue, par une personne habilitée": "Planned inspections are done at the planned step, by an authorised person",
+  "Contrôles reportés en fin de fabrication, contrôleur non habilité, contrôle impossible après montage": "Inspections postponed to the end of manufacturing, unauthorised inspector, inspection impossible after assembly",
+  "Ce contrôle peut-il encore être fait plus tard si on l'oublie maintenant ?": "Can this inspection still be done later if it is forgotten now?",
+  "Les critères d'acceptation sont disponibles et compris au poste de contrôle": "Acceptance criteria are available and understood at the inspection station",
+  "Tolérances, critères visuels, documents de référence accessibles": "Tolerances, visual criteria, reference documents accessible",
+  "Quelle est la tolérance sur cette cote ? Où la trouves-tu ?": "What is the tolerance on this dimension? Where do you find it?",
+  "Les essais (banc, épreuves) suivent la procédure et leurs conditions sont enregistrées avec les résultats": "Tests (bench, pressure tests) follow the procedure and their conditions are recorded with the results",
+  "Procédure d'essai au poste, paramètres et instruments notés, présence client si requise": "Test procedure at the station, parameters and instruments recorded, customer present if required",
+  "Si l'essai est à refaire dans un an, que faut-il avoir noté aujourd'hui ?": "If the test has to be repeated in a year, what must be recorded today?",
+  "Soudeurs et opérateurs CND sont qualifiés ou certifiés pour l'opération en cours, avec une qualification valide": "Welders and NDT operators are qualified or certified for the current operation, with a valid qualification",
+  "Liste des qualifications, dates de validité, correspondance avec le DMOS ou la procédure CND": "List of qualifications, validity dates, match with the WPS or the NDT procedure",
+  "Pour quel mode opératoire es-tu qualifié ? Jusqu'à quand ?": "Which procedure are you qualified for? Until when?",
+  "Le DMOS ou la procédure CND applicable est disponible au poste et ses paramètres sont respectés": "The applicable WPS or NDT procedure is available at the station and its parameters are respected",
+  "Intensité, préchauffage, température entre passes, produit de ressuage ou réglage d'appareil comparés au document": "Current, preheat, interpass temperature, penetrant product or instrument setting compared with the document",
+  "Montre-moi les paramètres que tu dois respecter et ceux que tu as réglés.": "Show me the parameters you must respect and the ones you have set.",
+  "Les produits d'apport sont identifiés, conservés et étuvés selon les exigences, et leur lot est tracé": "Filler materials are identified, stored and baked as required, and their batch is traced",
+  "Four de maintien en service, étiquetage des lots, reliquats sans identification": "Holding oven in use, batch labelling, leftovers without identification",
+  "De quel lot viennent ces électrodes ? Où est-ce noté ?": "Which batch do these electrodes come from? Where is it recorded?",
+  "Les paramètres des traitements thermiques et autres procédés spéciaux sont enregistrés": "Parameters of heat treatments and other special processes are recorded",
+  "Courbes de four, relevés de paramètres, rattachement à la pièce ou au lot": "Furnace charts, parameter readings, link to the part or batch",
+  "Comment prouve-t-on, après coup, que le traitement a bien été fait ?": "How do we prove afterwards that the treatment was actually done?",
+  "Les instruments de mesure sont identifiés, étalonnés et dans leur période de validité": "Measuring instruments are identified, calibrated and within their validity period",
+  "Étiquette d'étalonnage, date d'échéance, instruments personnels non suivis": "Calibration label, due date, personal instruments not tracked",
+  "Comment sais-tu que cet instrument est bon pour mesurer aujourd'hui ?": "How do you know this instrument is fit to measure today?",
+  "L'instrument utilisé est adapté à la tolérance à vérifier": "The instrument used is suited to the tolerance to check",
+  "Résolution et incertitude au regard de l'intervalle de tolérance": "Resolution and uncertainty compared with the tolerance range",
+  "Pourquoi cet instrument pour cette cote ?": "Why this instrument for this dimension?",
+  "Les instruments hors validité ou défectueux sont isolés et identifiés comme tels": "Out-of-date or faulty instruments are segregated and identified as such",
+  "Bac ou étiquette dédiés, instrument hors validité encore sur le poste": "Dedicated bin or label, out-of-date instrument still at the workstation",
+  "Que fais-tu d'un instrument tombé ou dont la date est dépassée ?": "What do you do with an instrument that was dropped or is past its date?",
+  "Les instruments sont rangés et protégés (chocs, température, propreté)": "Instruments are stored and protected (impacts, temperature, cleanliness)",
+  "Rangement dédié, étuis, instruments posés sur les machines": "Dedicated storage, cases, instruments left on machines",
+  "Les ouvertures des pièces et équipements sont obturées dès qu'on n'y travaille pas": "Openings in parts and equipment are covered as soon as no one is working on them",
+  "Bouchons, caches et adhésifs adaptés ; brides, piquages et alésages laissés ouverts": "Suitable plugs, covers and tape; flanges, nozzles and bores left open",
+  "Quand tu t'arrêtes, que fais-tu des ouvertures de la pièce ?": "When you stop, what do you do with the part's openings?",
+  "Aucun corps étranger ne peut tomber dans une pièce ouverte (outils, chiffons, visserie, copeaux)": "No foreign material can fall into an open part (tools, rags, fasteners, chips)",
+  "Inventaire des outils en zone de propreté, objets dans les poches de poitrine, bacs de récupération": "Tool inventory in the cleanliness area, items in chest pockets, catch trays",
+  "Comment t'assures-tu que rien n'est tombé dans la pièce ?": "How do you make sure nothing has fallen into the part?",
+  "La séparation entre acier inoxydable et acier au carbone est respectée (outillage, brosses, meules, stockage)": "Separation between stainless and carbon steel is respected (tooling, brushes, grinding wheels, storage)",
+  "Outils dédiés et repérés, contact direct entre aciers différents, meules communes": "Dedicated, marked tools; direct contact between different steels; shared grinding wheels",
+  "Comment reconnais-tu les outils réservés à l'inox ?": "How do you recognise the tools reserved for stainless steel?",
+  "Seuls les produits autorisés sont utilisés au contact des pièces (marqueurs, pénétrants, lubrifiants, adhésifs)": "Only approved products are used in contact with parts (markers, penetrants, lubricants, tapes)",
+  "Liste des produits autorisés (teneur en halogènes et en soufre), produits non identifiés sur le poste": "List of approved products (halogen and sulphur content), unidentified products at the workstation",
+  "Ce marqueur ou ce produit est-il autorisé sur cette pièce ? Comment le sais-tu ?": "Is this marker or product approved for this part? How do you know?",
+  "Les pièces sont stockées et conditionnées à l'abri des chocs, de la corrosion et de la pollution": "Parts are stored and packed protected from impacts, corrosion and contamination",
+  "Protection des portées et des filetages, stockage au sol, humidité, conditionnement d'expédition": "Protection of seating surfaces and threads, storage on the floor, humidity, shipping packaging",
+  "Les produits à durée de vie limitée (élastomères, colles, produits chimiques) sont utilisés avant leur date limite": "Limited shelf-life products (elastomers, adhesives, chemicals) are used before their expiry date",
+  "Dates de péremption, dates d'ouverture, stockage": "Expiry dates, opening dates, storage",
+  "Les produits non conformes ou douteux sont identifiés, isolés et ne peuvent pas être utilisés par erreur": "Nonconforming or doubtful products are identified, segregated and cannot be used by mistake",
+  "Étiquette, zone de quarantaine, pièces douteuses laissées sur le poste": "Label, quarantine area, doubtful parts left at the workstation",
+  "Où mets-tu une pièce dont tu doutes ? Qui décide de ce qu'elle devient ?": "Where do you put a part you have doubts about? Who decides what happens to it?",
+  "Les écarts sont déclarés en FNC et aucune reprise n'est faite sans décision formalisée": "Gaps are reported as NCRs and no rework is done without a formal decision",
+  "Reprises discrètes, réparations hors gamme, dérogations données à l'oral": "Quiet rework, repairs outside the routing, concessions given verbally",
+  "Que fais-tu quand une cote est hors tolérance ?": "What do you do when a dimension is out of tolerance?",
+  "Les FNC et actions correctives du service sont traitées dans les délais et leur efficacité est vérifiée": "The department's NCRs and corrective actions are handled on time and their effectiveness is checked",
+  "Éléments en retard dans Fabasoft, actions clôturées sans vérification d'efficacité": "Overdue items in Fabasoft, actions closed without an effectiveness check",
+  "Quelle est la plus ancienne FNC ouverte du service ? Qu'est-ce qui la bloque ?": "What is the department's oldest open NCR? What is holding it up?",
+  "Les causes des écarts récurrents sont connues des équipes concernées": "The causes of recurring gaps are known to the teams concerned",
+  "Connaissance des causes et des actions engagées sur les défauts qui reviennent": "Knowledge of the causes and of the actions taken on recurring defects",
+  "Ce problème est-il déjà arrivé ? Qu'est-ce qui a changé depuis ?": "Has this problem happened before? What has changed since?",
+  "Les personnes savent ce qu'est un CFSI et comment signaler une suspicion": "People know what a CFSI is and how to report a suspicion",
+  "Sensibilisation suivie, canal de signalement connu, exemples compris": "Awareness session attended, reporting channel known, examples understood",
+  "Si un certificat ou un marquage te paraît bizarre, que fais-tu ?": "If a certificate or a marking looks odd to you, what do you do?",
+  "Les marquages, certificats et documents fournisseurs sont vérifiés à réception (cohérence, signes de modification)": "Markings, certificates and supplier documents are checked on receipt (consistency, signs of alteration)",
+  "Certificats retouchés, tampons ou logos incohérents, marquages refrappés, emballages inhabituels": "Altered certificates, inconsistent stamps or logos, re-stamped markings, unusual packaging",
+  "Qu'est-ce qui te ferait douter d'un certificat matière ?": "What would make you doubt a material certificate?",
+  "Une suspicion d'irrégularité est traitée sans délai : produit isolé, qualité informée, aucune utilisation": "A suspected irregularity is handled at once: product segregated, quality informed, no use",
+  "Connaissance de la conduite à tenir, discrétion avant analyse, pas de diffusion large": "Knowledge of what to do, discretion before analysis, no wide distribution",
+  "Si tu as un doute sur l'authenticité d'une pièce, à qui en parles-tu en premier ?": "If you doubt that a part is genuine, who do you talk to first?",
+  "Les personnes sont formées et habilitées pour les tâches réalisées (matrice de compétences à jour)": "People are trained and authorised for the tasks they perform (competence matrix up to date)",
+  "Matrice affichée ou accessible, habilitations à jour, tâches réalisées hors habilitation": "Matrix displayed or accessible, authorisations up to date, tasks done without authorisation",
+  "Qui t'a formé à cette opération ? Est-ce noté quelque part ?": "Who trained you for this operation? Is it written down somewhere?",
+  "Les nouveaux arrivants et les intérimaires sont accompagnés sur les opérations nucléaires": "Newcomers and temporary staff are supported on nuclear operations",
+  "Tuteur désigné, opérations interdites sans accompagnement, intégration tracée": "Appointed mentor, operations forbidden without support, induction recorded",
+  "Qui accompagne les nouveaux sur ces pièces ?": "Who supports newcomers on these parts?",
+  "La sensibilisation à la sûreté nucléaire et à la culture de sûreté a été suivie": "Nuclear safety and safety culture awareness training has been attended",
+  "Date de la dernière sensibilisation, contenu retenu": "Date of the last awareness session, what was remembered",
+  "Qu'as-tu retenu de la dernière sensibilisation sûreté ?": "What do you remember from the last safety awareness session?",
+  "Les exigences nucléaires du contrat sont identifiées et transmises aux services concernés": "The contract's nuclear requirements are identified and passed on to the departments concerned",
+  "Classement, code de construction, points d'arrêt, surveillance client repris dans la revue de contrat et la fiche de lancement": "Classification, construction code, hold points and customer surveillance included in the contract review and the launch sheet",
+  "Où trouve-t-on les exigences particulières de cette affaire ?": "Where are the specific requirements of this job?",
+  "Les modifications d'exigences ou de plans sont maîtrisées et diffusées aux bons destinataires": "Changes to requirements or drawings are controlled and distributed to the right people",
+  "Changement d'indice répercuté jusqu'à l'atelier et aux fournisseurs, anciens indices retirés": "Revision change passed on to the shop floor and suppliers, old revisions withdrawn",
+  "Quand un plan change d'indice, comment l'atelier et le fournisseur le savent-ils ?": "When a drawing changes revision, how do the shop floor and the supplier find out?",
+  "Les dérogations et demandes de modification sont formalisées et acceptées par le client avant application": "Concessions and change requests are formalised and accepted by the customer before being applied",
+  "Accord écrit du client, dérogations appliquées avant réponse": "Written customer agreement, concessions applied before a reply",
+  "Avez-vous déjà appliqué une modification en attendant l'accord du client ?": "Have you ever applied a change while waiting for the customer's agreement?",
+  "La vérification indépendante des documents techniques (calculs, plans, notes) est faite et tracée": "Independent verification of technical documents (calculations, drawings, notes) is done and recorded",
+  "Vérificateur distinct de l'auteur, trace de la vérification": "Checker different from the author, record of the check",
+  "Qui vérifie tes calculs ou tes plans, et comment le voit-on ?": "Who checks your calculations or drawings, and how can that be seen?",
+  "Les commandes reprennent les exigences nucléaires applicables (qualité, CFSI, culture de sûreté, accès client)": "Purchase orders include the applicable nuclear requirements (quality, CFSI, safety culture, customer access)",
+  "Clauses de commande, transmission des exigences au rang suivant": "Order clauses, flow-down of requirements to the next tier",
+  "Sur cette commande, où sont les exigences nucléaires transmises au fournisseur ?": "On this order, where are the nuclear requirements passed on to the supplier?",
+  "Les fournisseurs et sous-traitants utilisés sont évalués et autorisés pour le domaine concerné": "The suppliers and subcontractors used are evaluated and approved for the field concerned",
+  "Liste des fournisseurs autorisés, domaine d'agrément, fournisseur hors liste": "Approved supplier list, field of approval, supplier not on the list",
+  "Comment vérifies-tu qu'un fournisseur peut être consulté pour une pièce nucléaire ?": "How do you check that a supplier can be consulted for a nuclear part?",
+  "La surveillance des fournisseurs critiques est planifiée et réalisée": "Surveillance of critical suppliers is planned and carried out",
+  "Plan de surveillance, visites et inspections réalisées, points d'arrêt chez le fournisseur": "Surveillance plan, visits and inspections carried out, hold points at the supplier",
+  "Les changements chez un fournisseur (site, procédé, sous-traitant de rang 2) sont connus et évalués": "Changes at a supplier (site, process, tier-2 subcontractor) are known and assessed",
+  "Notification des changements, analyse d'impact": "Notification of changes, impact analysis",
+  "Comment saurait-on qu'un fournisseur a changé de fonderie ?": "How would we know that a supplier has changed foundry?",
+  "Le poste est rangé et propre, chaque chose a une place identifiée": "The workstation is tidy and clean, everything has an identified place",
+  "Objets inutiles, rangements repérés, propreté du sol et des postes": "Unneeded items, marked storage, cleanliness of floors and workstations",
+  "Les indicateurs et l'avancement affichés sont à jour et compris par l'équipe": "The indicators and progress displayed are up to date and understood by the team",
+  "Date de la dernière mise à jour, lecture faite par l'équipe": "Date of the last update, how the team reads it",
+  "Que te dit cet indicateur sur ta semaine ?": "What does this indicator tell you about your week?",
+  "Le point d'équipe aborde aussi la qualité et la sûreté, pas seulement le planning": "The team meeting also covers quality and safety, not just the schedule",
+  "Ordre du jour du point d'équipe, sujets qualité traités": "Team meeting agenda, quality topics covered",
+  "Au dernier point d'équipe, a-t-on parlé qualité ou sûreté ?": "At the last team meeting, was quality or safety discussed?",
+  "Les moyens (machines, outillages, éclairage) sont en état de permettre un travail conforme": "Equipment (machines, tooling, lighting) is in a condition that allows compliant work",
+  "Machines en défaut contournées, outillages usés, éclairage insuffisant au poste de contrôle": "Faulty machines worked around, worn tooling, poor lighting at the inspection station",
+  "Qu'est-ce qui t'empêche de faire du bon travail ici ?": "What stops you from doing good work here?",
+  /* en-tête, navigation */
+  "Visite terrain Gemba · Outils qualité": "Gemba walk · Quality tools",
+  "Retour aux outils": "Back to the tools",
+  "← Outils": "← Tools",
+  "Visite terrain qualité et sûreté": "Quality and safety walk",
+  "Visites": "Walks",
+  "Pilotage": "Monitoring",
+  "Référentiel": "Practices",
+  "Paramètres": "Settings",
+  "Infos": "Details",
+  "Grille": "Checklist",
+  "Synthèse": "Summary",
+  "Compte rendu": "Report",
+  "Fermer": "Close",
+
+  /* évaluations, suites, lieux, modes */
+  "Conforme": "Compliant",
+  "Bonne pratique": "Good practice",
+  "À améliorer": "To improve",
+  "À amé­liorer": "To im­prove",
+  "Écart": "Gap",
+  "Non applicable ou non observé": "Not applicable or not observed",
+  "BP": "GP",
+  "AM": "TI",
+  "E": "G",
+  "À définir": "To be decided",
+  "Traité sur place": "Fixed on the spot",
+  "Information du responsable": "Manager informed",
+  "FNC à ouvrir": "NCR to open",
+  "CAPA à proposer": "CAPA to propose",
+  "Suspicion CFSI à signaler": "Suspected CFSI to report",
+  "Atelier": "Shop floor",
+  "Bureau": "Office",
+  "Atelier et bureau": "Shop floor and office",
+  "atelier": "shop floor",
+  "bureau": "office",
+  "Rapide (points essentiels)": "Quick (key points)",
+  "Complète": "Full",
+  "Ciblée sur des thèmes": "Focused on themes",
+  "Rapide": "Quick",
+  "Ciblée": "Focused",
+
+  /* stockage, photos, vérification */
+  "Enregistrement local impossible sur cet appareil. Exporter la visite en JSON pour ne rien perdre.": "Local saving is not possible on this device. Export the walk as JSON so nothing is lost.",
+  "Format d'image non lu": "Image format not readable",
+  "Photo absente sur cet appareil": "Photo not on this device",
+  "Retour aux équipes non coché dans la synthèse": "Team feedback not ticked in the summary",
+  "Annuler": "Cancel",
+  "Pratique liée à la sûreté : mettre la pièce ou l'activité en sécurité et prévenir le responsable avant de quitter la zone.": "Safety-related practice: make the part or activity safe and inform the manager before leaving the area.",
+  "Suspicion CFSI : isoler le produit ou le document, ne pas l'utiliser et prévenir le service qualité par le canal prévu, sans diffusion large avant analyse.": "Suspected CFSI: segregate the product or document, do not use it and inform the quality department through the agreed channel, with no wide distribution before analysis.",
+
+  /* visiteur */
+  "Nom non renseigné": "Name not filled in",
+  "non renseigné": "not filled in",
+  "Adresse e-mail à renseigner pour recevoir les rapports": "Email address needed to receive the reports",
+  "Changer": "Change",
+  "Matricule": "Employee ID",
+  "Nom et prénom": "Full name",
+  "Fonction": "Position",
+  "Adresse e-mail (réception des rapports)": "Email address (to receive the reports)",
+  "Qui fait la visite ?": "Who is doing the walk?",
+  "Un matricule déjà connu remplit les autres champs. L'identité est gardée sur cet appareil pour les prochaines visites.": "A known employee ID fills in the other fields. The identity is kept on this device for the next walks.",
+  "Service": "Department",
+  "Enregistrer": "Save",
+  "Le matricule et le nom sont obligatoires.": "The employee ID and the name are required.",
+  "L'adresse e-mail n'est pas valide.": "The email address is not valid.",
+
+  /* nouvelle visite */
+  "Aucune zone : en ajouter dans Paramètres": "No area: add some in Settings",
+  "thèmes choisis": "chosen themes",
+  "Nouvelle visite": "New walk",
+  "Choisir le lieu et la profondeur de la visite. Tout reste modifiable pendant la visite.": "Choose the place and depth of the walk. Everything can still be changed during the walk.",
+  "Visiteur": "Visitor",
+  "Le matricule identifie la visite et son auteur. Il est gardé sur cet appareil pour les prochaines visites.": "The employee ID identifies the walk and its author. It is kept on this device for the next walks.",
+  "Lieu": "Place",
+  "Zone ou service": "Area or department",
+  "Profondeur de la visite": "Depth of the walk",
+  "Thèmes à observer": "Themes to observe",
+  "Date": "Date",
+  "Heure": "Time",
+  "Activité, affaire ou OF observé (facultatif)": "Activity, job or work order observed (optional)",
+  "Ex. usinage corps de pompe, OF 4512...": "E.g. pump casing machining, work order 4512...",
+  "Accompagné par (facultatif)": "Accompanied by (optional)",
+  "Nom (matricule) ou matricule": "Name (employee ID) or employee ID",
+  "On observe des pratiques, pas des personnes : les constats décrivent ce qui a été vu sans nommer qui que ce soit.": "We observe practices, not people: findings describe what was seen without naming anyone.",
+
+  /* infos de la visite */
+  "Visite clôturée": "Walk closed",
+  "Visite en cours": "Walk in progress",
+  "Profondeur": "Depth",
+  "Thèmes observés": "Themes observed",
+  "Non renseignée": "Not specified",
+  "Accompagné par": "Accompanied by",
+  "Fonctions rencontrées": "Positions met",
+  "Ex. 2 opérateurs régleurs, chef d'équipe, contrôleur": "E.g. 2 setter-operators, team leader, inspector",
+  "Activité, affaire ou OF observé": "Activity, job or work order observed",
+  "Adresse e-mail du rapport": "Report email address",
+  "Supprimer la visite": "Delete the walk",
+  "La visite et ses photos sont retirées de cet appareil. Un bouton Annuler reste disponible quelques secondes.": "The walk and its photos are removed from this device. A Cancel button remains available for a few seconds.",
+  "Supprimer cette visite": "Delete this walk",
+
+  /* grille */
+  "évalués": "assessed",
+  "Tout": "All",
+  "À évaluer": "To assess",
+  "Constats": "Findings",
+  "Suivant": "Next",
+  "Tous les points de la grille sont évalués.": "All checklist points are assessed.",
+  "Aucun constat pour l’instant.": "No finding yet.",
+  "La grille est vide : choisir une profondeur dans Infos.": "The checklist is empty: choose a depth in Details.",
+  "Ajouter une observation hors grille": "Add an observation outside the checklist",
+  "Repères : ce qu'il faut regarder et la question à poser sur place. Toucher à nouveau une évaluation l'efface.": "Prompts: what to look at and the question to ask on site. Tapping a rating again clears it.",
+  "Sûreté": "Safety",
+  "Essentiel": "Key",
+  "Masquer les repères": "Hide prompts",
+  "Repères": "Prompts",
+  "Note": "Note",
+  "Retirer": "Remove",
+  "Observation hors grille": "Observation outside the checklist",
+  "Pratique observée, en une phrase": "Practice observed, in one sentence",
+  "Liée à la sûreté": "Safety-related",
+  "Regarder :": "Look at:",
+  "Demander :": "Ask:",
+  "Bonne pratique observée": "Good practice observed",
+  "Ce qui peut être amélioré": "What can be improved",
+  "Constat": "Finding",
+  "Ce qui mérite d'être partagé avec les autres équipes": "What deserves to be shared with other teams",
+  "Ce qui a été vu : pratique, lieu, pièce ou document. Sans nommer de personne.": "What was seen: practice, place, part or document. Without naming anyone.",
+  "Note libre": "Free note",
+  "Action immédiate sur place": "Immediate action on site",
+  "Mise en sécurité, isolement, information du responsable...": "Making safe, segregation, informing the manager...",
+  "Suite à donner": "Follow-up",
+  "Réf. Fabasoft": "Fabasoft ref.",
+  "Numéro FNC ou CAPA": "NCR or CAPA number",
+  "Photo": "Photo",
+  "Ajouter une photo": "Add a photo",
+  "Tous les points sont évalués.": "All points are assessed.",
+
+  /* synthèse */
+  "Aucun point évalué.": "No point assessed.",
+  "Aucun.": "None.",
+  "Observation sans intitulé": "Untitled observation",
+  "Points vus": "Points seen",
+  "Pratiques conformes": "Compliant practices",
+  "bonnes pratiques incluses": "good practices included",
+  "Écarts": "Gaps",
+  "Bonnes pratiques": "Good practices",
+  "Par thème": "By theme",
+  "Conclusion de la visite": "Conclusion of the walk",
+  "Proposer à partir des constats": "Propose from the findings",
+  "Points forts": "Strengths",
+  "Points à améliorer": "Points to improve",
+  "Échanges avec les équipes": "Discussions with the teams",
+  "Questions posées, réponses marquantes, difficultés remontées, engagements pris sur place": "Questions asked, notable answers, difficulties raised, commitments made on site",
+  "Retour fait aux équipes à la fin de la visite (remerciements, points à corriger, suites prévues)": "Feedback given to the teams at the end of the walk (thanks, points to correct, planned follow-up)",
+  "Vérification": "Check",
+  "Rien à signaler.": "Nothing to report.",
+  "Rouvrir la visite": "Reopen the walk",
+  "Clôturer et envoyer le rapport": "Close and send the report",
+  "Clôturer sans envoyer": "Close without sending",
+  "Observation": "Observation",
+
+  /* compte rendu */
+  "Dans cet affichage, l'envoi direct n'est pas possible : le Word et le PDF sont proposés à l'enregistrement, à joindre ensuite à un mail.": "In this view, direct sending is not possible: the Word and PDF files are offered for saving, to attach to an email afterwards.",
+  "Envoi direct par le service de messagerie de l'entreprise, Word et PDF en pièces jointes.": "Sent directly by the company's mail service, with the Word and PDF files attached.",
+  "Le menu de partage du téléphone s'ouvre avec les pièces jointes : choisir la messagerie. Pour un envoi direct en un clic, configurer le service d'envoi dans Paramètres.": "The phone's share menu opens with the attachments: choose the mail app. For one-click direct sending, set up the sending service in Settings.",
+  "Le Word et le PDF sont enregistrés et un mail prérempli s'ouvre : il reste à y joindre les deux fichiers. Pour un envoi direct en un clic, configurer le service d'envoi dans Paramètres.": "The Word and PDF files are saved and a prefilled email opens: you just need to attach the two files. For one-click direct sending, set up the sending service in Settings.",
+  "Envoyer le rapport par mail": "Send the report by email",
+  "Destinataire :": "Recipient:",
+  "adresse à renseigner": "address to fill in",
+  "Modifier": "Edit",
+  "Envoyer le Word et le PDF": "Send the Word and PDF files",
+  "Télécharger": "Download",
+  "Word": "Word",
+  "Compte rendu .docx": ".docx report",
+  "Compte rendu .pdf": ".pdf report",
+  "Grille et constats": "Checklist and findings",
+  "Transfert de la visite": "Walk transfer",
+  "Message court": "Short message",
+  "Teams ou courriel": "Teams or email",
+  "N° de visite": "Walk no.",
+  "Date et heure": "Date and time",
+  "Activité observée": "Activity observed",
+  "Statut": "Status",
+  "En cours": "In progress",
+  "Retour fait aux équipes": "Feedback given to the teams",
+  "Oui": "Yes",
+  "Non": "No",
+  "Compte rendu de visite terrain": "Gemba walk report",
+  "1. Synthèse": "1. Summary",
+  "2. Résultats par thème": "2. Results by theme",
+  "Thème": "Theme",
+  "Évalués": "Assessed",
+  "Conformes": "Compliant",
+  "Taux": "Rate",
+  "3. Écarts": "3. Gaps",
+  "Point": "Point",
+  "Pratique attendue": "Expected practice",
+  "Action immédiate": "Immediate action",
+  "Suite": "Follow-up",
+  "Aucun écart relevé.": "No gap found.",
+  "4. Points à améliorer": "4. Points to improve",
+  "5. Bonnes pratiques": "5. Good practices",
+  "Aucune relevée.": "None found.",
+  "6. Photos": "6. Photos",
+  "Évaluation": "Rating",
+  "Commentaire": "Comment",
+  "Non évalué": "Not assessed",
+  "Les observations portent sur des pratiques et non sur des personnes. Les écarts sont enregistrés et suivis dans Fabasoft.": "Observations concern practices, not people. Gaps are recorded and tracked in Fabasoft.",
+
+  /* liste des visites */
+  "Aucune visite pour l'instant.": "No walk yet.",
+  "Une visite prend 10 à 15 minutes en mode rapide. Les données restent sur cet appareil ; l'export JSON permet de les transférer sur un ordinateur ou de les regrouper avec celles des collègues.": "A walk takes 10 to 15 minutes in quick mode. Data stays on this device; the JSON export lets you transfer it to a computer or combine it with colleagues' walks.",
+  "Importer des visites (JSON)": "Import walks (JSON)",
+  "Charger des visites d'exemple": "Load sample walks",
+  "Charger des visites d’exemple": "Load sample walks",
+  "Rechercher : zone, numéro, matricule, OF": "Search: area, number, employee ID, work order",
+  "Tous les visiteurs": "All visitors",
+  "Mes visites": "My walks",
+  "Tous les statuts": "All statuses",
+  "Clôturées": "Closed",
+  "Exporter (JSON)": "Export (JSON)",
+  "Supprimer": "Delete",
+  "Désélectionner": "Deselect",
+  "Aucune visite ne correspond aux filtres.": "No walk matches the filters.",
+  "Sélectionner": "Select",
+  "Zone non renseignée": "Area not specified",
+  "Clôturée": "Closed",
+  "Visiteur non renseigné": "Visitor not specified",
+
+  /* pilotage */
+  "Consolidation des visites de cet appareil, y compris celles importées des collègues. Utile pour la revue de direction (culture qualité et sûreté).": "Consolidation of the walks on this device, including those imported from colleagues. Useful for the management review (quality and safety culture).",
+  "3 derniers mois": "Last 3 months",
+  "6 derniers mois": "Last 6 months",
+  "12 derniers mois": "Last 12 months",
+  "Toute la période": "Whole period",
+  "Excel pour Power BI": "Excel for Power BI",
+  "Aucune visite sur la période.": "No walk over the period.",
+  "Points observés": "Points observed",
+  "Couverture des zones": "Area coverage",
+  "Toutes les zones sont à jour.": "All areas are up to date.",
+  "Jamais visitée": "Never visited",
+  "Aucune visite sur la période": "No walk over the period",
+  "Pratiques conformes par thème": "Compliant practices by theme",
+  "Points les plus souvent en défaut": "Points most often failing",
+  "Aucun point en défaut sur la période.": "No failing point over the period.",
+  "Écarts et suites": "Gaps and follow-up",
+  "Le suivi se fait dans Fabasoft ; ce tableau vérifie seulement que chaque écart a une suite et, si besoin, une référence.": "Tracking is done in Fabasoft; this table only checks that each gap has a follow-up and, where needed, a reference.",
+  "référence Fabasoft à reporter": "Fabasoft reference to record",
+  "Aucun écart sur la période.": "No gap over the period.",
+  "Bonnes pratiques à partager": "Good practices to share",
+  "Aucune sur la période.": "None over the period.",
+
+  /* référentiel */
+  "Les pratiques attendues servent à construire chaque nouvelle visite. Les visites déjà faites gardent leur propre copie de la grille.": "The expected practices are used to build each new walk. Walks already done keep their own copy of the checklist.",
+  "Ajouter un point": "Add a point",
+  "Thèmes": "Themes",
+  "Exporter (Excel)": "Export (Excel)",
+  "Importer (Excel ou CSV)": "Import (Excel or CSV)",
+  "Rétablir le référentiel proposé": "Restore the suggested practices",
+  "Rechercher": "Search",
+  "Tous les thèmes": "All themes",
+  "Points désactivés": "Disabled points",
+  "Aucun point ne correspond.": "No point matches.",
+  "Désactivé": "Disabled",
+  "Identifiant": "ID",
+  "Ex. FME07": "E.g. FME07",
+  "Ce qu'il faut regarder": "What to look at",
+  "Question à poser sur place": "Question to ask on site",
+  "Référence": "Reference",
+  "Essentiel (repris dans le mode rapide)": "Key (included in quick mode)",
+  "Lié à la sûreté (alerte en cas d'écart)": "Safety-related (alert if there is a gap)",
+  "Actif": "Active",
+  "L'identifiant et la pratique attendue sont obligatoires.": "The ID and the expected practice are required.",
+  "Code": "Code",
+  "Libellé": "Label",
+  "Le code est repris dans les identifiants des points. Un thème utilisé par des points ne peut pas être retiré.": "The code is used in point IDs. A theme used by points cannot be removed.",
+  "Nouveau thème": "New theme",
+  "Code et libellé obligatoires pour un nouveau thème.": "Code and label are required for a new theme.",
+  /* paramètres */
+  "Mon identité": "My identity",
+  "Aucune identité sur cet appareil.": "No identity on this device.",
+  "Renseigner mon matricule": "Enter my employee ID",
+  "Envoi des rapports par mail": "Sending reports by email",
+  "Sans service d'envoi, le bouton Envoyer passe par le partage du téléphone ou par un mail prérempli. Avec le flux de l'entreprise, le Word et le PDF partent en un clic.": "Without a sending service, the Send button uses the phone's share menu or a prefilled email. With the company flow, the Word and PDF files go out in one click.",
+  "Adresse du service d'envoi (HTTP URL du flux Power Automate)": "Sending service address (HTTP URL of the Power Automate flow)",
+  "Code d'accès du flux (facultatif)": "Flow access code (optional)",
+  "Copie systématique à (facultatif)": "Always copy to (optional)",
+  "Ex. boîte qualité du site": "E.g. the site's quality mailbox",
+  "Guide de mise en place du flux": "Flow set-up guide",
+  "Tester l'envoi": "Test sending",
+  "Annuaire des visiteurs": "Visitor directory",
+  "Facultatif. Utile sur un appareil partagé et pour regrouper les visites de plusieurs personnes : un matricule saisi retrouve le nom, la fonction et l'adresse. Import possible depuis un Excel ou un CSV avec une colonne Matricule.": "Optional. Useful on a shared device and to group walks by several people: an employee ID entered brings up the name, position and address. Can be imported from an Excel or CSV file with an Employee ID column.",
+  "Sans nom": "No name",
+  "Cet appareil": "This device",
+  "Annuaire vide.": "Empty directory.",
+  "Ajouter une personne": "Add a person",
+  "Site et numérotation": "Site and numbering",
+  "Organisation": "Organisation",
+  "Site": "Site",
+  "Préfixe de numérotation": "Numbering prefix",
+  "Fréquence cible par zone (jours)": "Target frequency per area (days)",
+  "Photos et affichage": "Photos and display",
+  "Autoriser les photos dans les visites": "Allow photos in walks",
+  "Respecter les règles photo du site et des clients (pièces, plans, zones client). Désactiver si la prise de vue n'est pas autorisée.": "Follow the site's and customers' photo rules (parts, drawings, customer areas). Turn off if taking photos is not allowed.",
+  "Taille des photos": "Photo size",
+  "Réduite (1024 px)": "Small (1024 px)",
+  "Standard (1280 px)": "Standard (1280 px)",
+  "Détaillée (1600 px)": "Detailed (1600 px)",
+  "Thème d'affichage": "Display theme",
+  "Selon le téléphone": "Follow the phone",
+  "Clair": "Light",
+  "Sombre": "Dark",
+  "Zones et services": "Areas and departments",
+  "Proposés à la création d'une visite. Une zone désactivée n'est plus proposée mais reste dans l'historique.": "Offered when creating a walk. A disabled area is no longer offered but stays in the history.",
+  "Nom": "Name",
+  "Active": "Active",
+  "Ajouter une zone": "Add an area",
+  "Données": "Data",
+  "photos en cours de comptage": "counting photos",
+  ". Stockage local actif. Les données ne quittent pas l'appareil sans export ou envoi.": ". Local storage active. Data does not leave the device without an export or a send.",
+  "Stockage local indisponible : exporter régulièrement en JSON.": "Local storage unavailable: export to JSON regularly.",
+  "Les données ne quittent pas l'appareil sans export ou envoi.": "Data does not leave the device without an export or a send.",
+  "La configuration (référentiel, zones, annuaire, site, service d'envoi) se diffuse aux collègues sans les visites ni l'identité : chacun l'importe une fois, puis renseigne son matricule.": "The configuration (practices, areas, directory, site, sending service) can be shared with colleagues without the walks or the identity: each person imports it once, then enters their employee ID.",
+  "Exporter la configuration (JSON)": "Export the configuration (JSON)",
+  "Exporter toute la base (JSON)": "Export the whole database (JSON)",
+  "Importer (JSON)": "Import (JSON)",
+  "Exporter les visites (Excel)": "Export the walks (Excel)",
+  "Retirer les visites d’exemple": "Remove the sample walks",
+  "Tout effacer": "Erase everything",
+  "Supprime visites, photos, référentiel modifié et paramètres de cet appareil.": "Deletes walks, photos, the edited practices and the settings from this device.",
+  "Effacer toutes les données": "Erase all data",
+  "Visite terrain Gemba, version 1.0. Fichier autonome, sans connexion requise.": "Gemba walk, version 1.0. Standalone file, no connection needed.",
+  "Modifier une personne": "Edit a person",
+  "Adresse e-mail": "Email address",
+  "Des visites portent ce matricule : elles gardent les informations enregistrées au moment de la visite.": "Walks carry this employee ID: they keep the information recorded at the time of the walk.",
+
+  /* visites d'exemple */
+  "Bride d'aspiration laissée ouverte pendant la pause, sans obturateur.": "Suction flange left open during the break, with no cover.",
+  "Pied à coulisse sans étiquette d'étalonnage utilisé pour un contrôle dimensionnel.": "Caliper without a calibration label used for a dimensional inspection.",
+  "Autocontrôles de l'opération 40 déjà visés alors que la pièce est encore en usinage.": "Self-checks for operation 40 already signed while the part is still being machined.",
+  "Deux brides sans identification posées sur l’établi.": "Two unidentified flanges left on the bench.",
+  "Plan à l'indice B au poste, OF lancé à l'indice C.": "Drawing at revision B at the workstation, work order released at revision C.",
+  "Brosse métallique non repérée utilisée sur une pièce inox.": "Unmarked wire brush used on a stainless part.",
+  "Commande de visserie pour une affaire nucléaire sans clause CFSI.": "Fastener order for a nuclear job without a CFSI clause.",
+  "Pièce refusée au contrôle laissée sur le poste sans étiquette.": "Part rejected at inspection left at the workstation without a label.",
+  "Opération suivante démarrée avant la levée du point de notification client.": "Next operation started before the customer notification point was released.",
+  "Pratique connue mais appliquée de façon inégale selon les équipes.": "Practice known but applied unevenly across teams.",
+  "Liste de contrôle des obturateurs affichée et remplie en fin de poste.": "Cover checklist displayed and filled in at the end of the shift.",
+  "Les opérateurs citent spontanément un arrêt sur doute récent et la réponse obtenue.": "Operators readily mention a recent stop-when-in-doubt and the answer they got.",
+  "Pré-job briefing tracé sur le dossier avant la première soudure de la série.": "Pre-job briefing recorded in the file before the first weld of the series.",
+  "Écart constaté sur la pratique attendue (donnée d’exemple).": "Gap observed on the expected practice (sample data).",
+  "Responsable prévenu, pièce mise en attente.": "Manager informed, part put on hold.",
+  "Pratique exemplaire à partager (donnée d’exemple).": "Exemplary practice to share (sample data).",
+  "Chef d'atelier": "Shop supervisor",
+  "Responsable méthodes": "Methods manager",
+  "Opérateur régleur, chef d'équipe": "Setter-operator, team leader",
+  "Deux techniciens, responsable de service": "Two technicians, department manager",
+
+  /* exports */
+  "Enregistrement de fichiers indisponible dans cet affichage. Ouvrir l'outil depuis le fichier HTML.": "File saving unavailable in this view. Open the tool from the HTML file.",
+  "Grille complète": "Full checklist",
+  "sur": "of",
+  "Visite": "Walk",
+  "Observations": "Observations",
+  "N° visite": "Walk no.",
+  "Zone": "Area",
+  "Conforme (1/0)": "Compliant (1/0)",
+  "Photos": "Photos",
+  "Matricule accompagnant": "Companion employee ID",
+  "Points": "Points",
+  "Vus": "Seen",
+  "Écarts sûreté": "Safety gaps",
+  "N/A": "N/A",
+  "Pratiques conformes (%)": "Compliant practices (%)",
+  "Retour fait": "Feedback given",
+  "Échanges": "Discussions",
+  "Envoyé à": "Sent to",
+  "Id": "ID",
+  "Libellé du thème": "Theme label",
+  "Regarder": "Look at",
+  "Demander": "Ask",
+  "Rubrique": "Item",
+  "Valeur": "Value",
+  "Annuaire": "Directory",
+  "Aucune visite à exporter.": "No walk to export.",
+  "fichier Excel non reconnu": "Excel file not recognised",
+  "lecture Excel non prise en charge par ce navigateur, utiliser un CSV": "this browser cannot read Excel files, use a CSV",
+  "aucune ligne lue": "no row read",
+  "colonne « Pratique attendue » introuvable": "column “Expected practice” not found",
+  "aucun point avec une pratique attendue": "no point with an expected practice",
+  "Divers": "Miscellaneous",
+  "Remplacer : le référentiel devient celui du fichier. Fusionner : les points de même identifiant sont mis à jour, les autres ajoutés. Les visites déjà faites ne changent pas.": "Replace: the practices become those of the file. Merge: points with the same ID are updated, the others are added. Walks already done do not change.",
+  "Fusionner": "Merge",
+  "Remplacer": "Replace",
+  "Importer le référentiel": "Import practices",
+  "Référentiel fusionné.": "Practices merged.",
+  "Référentiel remplacé.": "Practices replaced.",
+  "colonne « Matricule » introuvable": "column “Employee ID” not found",
+  "Fichier JSON illisible.": "Unreadable JSON file.",
+  "Ce fichier ne vient pas de l'outil de visite terrain.": "This file does not come from the Gemba walk tool.",
+  "Importer la configuration": "Import the configuration",
+  "Les visites et l'identité de cet appareil sont conservées.": "The walks and the identity on this device are kept.",
+  "Importer": "Import",
+  "Configuration importée.": "Configuration imported.",
+  "Importer une base complète": "Import a full database",
+  "Ajouter les visites : regroupe les visites avec celles de cet appareil (consolidation). Tout remplacer : reprend aussi le référentiel, les zones et les paramètres du fichier.": "Add the walks: combines the walks with those on this device (consolidation). Replace everything: also takes the practices, areas and settings from the file.",
+  "Tout remplacer": "Replace everything",
+  "Ajouter les visites": "Add the walks",
+  "À coller dans Teams ou dans un courriel. Le texte reste modifiable avant copie.": "To paste into Teams or an email. The text can still be edited before copying.",
+  "Copier": "Copy",
+  "Message copié.": "Message copied.",
+  "Copie automatique refusée : le texte est sélectionné, utiliser Copier du téléphone.": "Automatic copy refused: the text is selected, use the phone's Copy.",
+
+  /* envoi */
+  "Adresse de réception": "Receiving address",
+  "Adresse e-mail qui recevra le Word et le PDF": "Email address that will receive the Word and PDF files",
+  "Garder cette adresse pour mes prochaines visites": "Keep this address for my next walks",
+  "Envoyer": "Send",
+  "Préparation du Word et du PDF...": "Preparing the Word and PDF files...",
+  "Envoi direct": "Direct send",
+  "Envoi direct non confirmé": "Direct send not confirmed",
+  "Envoi non confirmé": "Send not confirmed",
+  "Cause habituelle : l'action Response du flux n'ajoute pas l'en-tête Access-Control-Allow-Origin, ou le réseau bloque l'adresse du flux.": "Usual cause: the flow's Response action does not add the Access-Control-Allow-Origin header, or the network blocks the flow address.",
+  "Envoyer depuis cet appareil": "Send from this device",
+  "Pas de réseau : envoi depuis cet appareil.": "No network: sending from this device.",
+  "Fichiers enregistrés": "Files saved",
+  "Joindre les fichiers à un mail": "Attach the files to an email",
+  "Le Word et le PDF ont été proposés à l'enregistrement. Les joindre à un mail adressé à": "The Word and PDF files were offered for saving. Attach them to an email addressed to",
+  ". Texte prêt à coller :": ". Text ready to paste:",
+  "Copier le texte": "Copy the text",
+  "Texte copié.": "Text copied.",
+  "Partage du téléphone": "Phone share",
+  "Ce téléphone ne partage pas les fichiers Word : le Word a été enregistré à part.": "This phone does not share Word files: the Word file was saved separately.",
+  "Mail prérempli": "Prefilled email",
+  "Word et PDF enregistrés dans Téléchargements : les joindre au mail qui vient de s’ouvrir.": "Word and PDF saved in Downloads: attach them to the email that has just opened.",
+  "Renseigner d'abord l'adresse du flux.": "First enter the flow address.",
+  "Le test d'envoi n'est possible que depuis le fichier HTML ouvert dans un navigateur.": "The sending test only works from the HTML file opened in a browser.",
+  "Renseigner votre adresse e-mail dans Mon identité pour recevoir le test.": "Enter your email address in My identity to receive the test.",
+  "Demande partie sans confirmation : vérifier la boîte, puis l'en-tête Access-Control-Allow-Origin de l'action Response.": "Request sent without confirmation: check the mailbox, then the Access-Control-Allow-Origin header of the Response action.",
+  "Mettre en place l'envoi direct": "Setting up direct sending",
+  "Copier le schéma": "Copy the schema",
+  "Schéma copié.": "Schema copied.",
+  "Copie refusée : le schéma est sélectionné.": "Copy refused: the schema is selected.",
+
+  /* actions */
+  "Nouvelle zone": "New area",
+  "Ces visites et leurs photos seront retirées de cet appareil.": "These walks and their photos will be removed from this device.",
+  "Cette visite et ses photos seront retirées de cet appareil.": "This walk and its photos will be removed from this device.",
+  "La visite a été modifiée depuis le dernier export.": "The walk has been changed since the last export.",
+  "Exporter d'abord (JSON)": "Export first (JSON)",
+  "Renseigner le matricule et le nom du visiteur.": "Enter the visitor's employee ID and name.",
+  "Renseigner le matricule du visiteur.": "Enter the visitor's employee ID.",
+  "Choisir au moins un thème.": "Choose at least one theme.",
+  "Choisir une zone (à créer dans Paramètres si besoin).": "Choose an area (create it in Settings if needed).",
+  "Retirer l’observation": "Remove the observation",
+  "Retirer cette observation hors grille et ses photos ?": "Remove this observation outside the checklist and its photos?",
+  "Aucun constat ni bonne pratique à reprendre.": "No finding or good practice to use.",
+  "Les champs contiennent déjà du texte.": "The fields already contain text.",
+  "Ajouter à la suite": "Append",
+  "Visite clôturée. Le compte rendu est prêt.": "Walk closed. The report is ready.",
+  "Clôturer la visite": "Close the walk",
+  "Quelques points restent à compléter :": "A few points remain to be completed:",
+  "Compléter": "Complete",
+  "Clôturer et envoyer quand même": "Close and send anyway",
+  "Clôturer quand même": "Close anyway",
+  "Visites d’exemple chargées (numéros EX). Les supprimer avant un usage réel.": "Sample walks loaded (EX numbers). Delete them before real use.",
+  "Les points et thèmes modifiés ou ajoutés sur cet appareil seront remplacés par le référentiel d’origine. Les visites déjà faites ne changent pas.": "Points and themes edited or added on this device will be replaced by the original practices. Walks already done do not change.",
+  "Rétablir": "Restore",
+  "Référentiel d’origine rétabli.": "Original practices restored.",
+  "Toutes les visites, photos, zones, paramètres et modifications du référentiel de cet appareil seront supprimés définitivement. Exporter la base en JSON avant si besoin.": "All walks, photos, areas, settings and practice changes on this device will be permanently deleted. Export the database to JSON first if needed.",
+  "Données effacées.": "Data erased.",
+  "Photo gardée en mémoire seulement : l'exporter avec la visite avant de fermer.": "Photo kept in memory only: export it with the walk before closing.",
+  "Stockage local indisponible dans cet affichage : exporter les visites en JSON avant de fermer.": "Local storage unavailable in this view: export the walks to JSON before closing."
+};
+const I18N_CODES = 'C|BP|AM|E|NA';
+const at = s => String(s).replace(/(\d\d\/\d\d\/\d{4}) à (\d\d:\d\d)/g, '$1 at $2');
+const pl = (n, one, many) => `${n} ${+n > 1 ? many : one}`;
+/* libellé en minuscules (thèmes, lieux) : traduit en retrouvant la forme avec majuscule */
+const Tci = s => { const t = T(s); if (t !== s) return t; const c = s.charAt(0).toUpperCase() + s.slice(1), tc = T(c); return tc !== c ? tc.charAt(0).toLowerCase() + tc.slice(1) : s; };
+const trList = sep => m => { const p = m.split(sep); return p.length > 1 && p.every(x => Tci(x.trim()) !== x.trim() || Object.prototype.hasOwnProperty.call(I18N_EN, x.trim())) ? p.map(x => Tci(x.trim())).join(sep) : m; };
+const I18N_RX = [
+  [/^(\d+)\. (.+)$/, (m, a, b) => a + '. ' + T(b)],
+  [/^(\d+) %$/, '$1%'],
+  [/^n\.d\.$/, 'n/a'],
+  [/^(\d+) points?$/, (m, n) => pl(n, 'point', 'points')],
+  [/^(\S+) : observation hors grille sans intitulé$/, '$1: observation outside the checklist without a title'],
+  [/^(\S+) : (écart|à améliorer) sans description de ce qui a été vu$/, (m, i, r) => `${i}: ${r === 'écart' ? 'gap' : 'point to improve'} without a description of what was seen`],
+  [/^(\S+) : écart sans suite définie$/, '$1: gap without a defined follow-up'],
+  [/^(\S+) : écart lié à la sûreté sans action immédiate notée$/, '$1: safety-related gap without an immediate action noted'],
+  [/^(\S+) : référence Fabasoft à reporter une fois la fiche créée$/, '$1: Fabasoft reference to record once the form is created'],
+  [/^(\d+) points? de la grille non évalués? \(N\/A si non observé\)$/, (m, n) => pl(n, 'checklist point', 'checklist points') + ' not assessed (N/A if not observed)'],
+  [/^Matricule (.+)$/, (m, r) => 'Employee ID ' + r.replace(/^non renseigné/, 'not filled in')],
+  [/^Commencer la visite \((\d+) points?\)$/, (m, n) => `Start the walk (${pl(n, 'point', 'points')})`],
+  [/^Visite (clôturée|en cours)(, donnée d’exemple)?\. Les changements de lieu ou de profondeur gardent les points déjà évalués\.$/, (m, s, ex) => `Walk ${s === 'clôturée' ? 'closed' : 'in progress'}${ex ? ', sample data' : ''}. Changes of place or depth keep the points already assessed.`],
+  [/^Le numéro (.+) reste celui attribué à la création de la visite\.$/, 'Number $1 remains the one assigned when the walk was created.'],
+  [/^(\d+) écarts?, (\d+) à améliorer, (\d+) bonnes? pratiques?$/, (m, e, a, b) => `${pl(e, 'gap', 'gaps')}, ${a} to improve, ${pl(b, 'good practice', 'good practices')}`],
+  [/^« (.+) »$/, (m, q) => '“' + T(q) + '”'],
+  [/^(\d+) écarts?$/, (m, n) => pl(n, 'gap', 'gaps')],
+  [/^(\d+) à améliorer$/, '$1 to improve'],
+  [/^(\d+) bonnes? pratiques?$/, (m, n) => pl(n, 'good practice', 'good practices')],
+  [/^(\d+) évalués?$/, '$1 assessed'],
+  [/^Conformes (\d+), bonnes pratiques (\d+), à améliorer (\d+), écarts (\d+), N\/A (\d+)$/, 'Compliant $1, good practices $2, to improve $3, gaps $4, N/A $5'],
+  [/^Action immédiate : (.*?)\. Suite : (.*)$/, (m, a, b) => { const [s, ...r] = b.split(', '); return `Immediate action: ${a === 'non renseignée' ? 'not filled in' : a}. Follow-up: ${T(s)}${r.length ? ', ' + r.join(', ') : ''}`; }],
+  [/^(.+?), (.+) \((atelier|bureau)\), (\d\d\/\d\d\/\d{4})$/, (m, n, z, t, d) => `${n}, ${T(z)} (${T(t)}), ${d}`],
+  [/^dont (\d+) N\/A$/, 'including $1 N/A'],
+  [/^dont (\d+) sûreté$/, 'including $1 safety'],
+  [/^Visite clôturée le (.+)\.$/, 'Walk closed on $1.'],
+  [/^Copie : (.+)$/, 'Cc: $1'],
+  [/^(.+) vers (.+) le (\d\d\/\d\d\/\d{4}) à (\d\d:\d\d)$/, (m, c, t, d, h) => `${T(c)} to ${t} on ${d} at ${h}`],
+  [/^(\d\d\/\d\d\/\d{4}) à (\d\d:\d\d)$/, '$1 at $2'],
+  [/^(.+) \((atelier|bureau)\)$/, (m, z, t) => `${T(z)} (${T(t)})`],
+  [/^(Rapide|Complète|Ciblée)(?: \((.+)\))?, (\d+) points?$/, (m, md, th, n) => `${T(md)}${th ? ' (' + trList(', ')(th) + ')' : ''}, ${pl(n, 'point', 'points')}`],
+  [/^Clôturée le (.+)$/, 'Closed on $1'],
+  [/^(\d+) sur (\d+)$/, '$1 of $2'],
+  [/^(\d+) \(dont (\d+) liés? à la sûreté\)$/, '$1 (including $2 safety-related)'],
+  [/^(\S+) Sûreté$/, (m, i) => i + '\nSafety'],
+  [/^(\S+) : photo absente sur cet appareil$/, '$1: photo not on this device'],
+  [new RegExp(`^(\\S+), (Conforme|Bonne pratique|À améliorer|Écart|Non applicable ou non observé|Note) : (.*)$`), (m, i, r, t) => `${i}, ${T(r)}: ${T(t)}`],
+  [/^(\d+) visites? sur cet appareil(?:, dont (\d+) en cours)?\.$/, (m, n, c) => `${pl(n, 'walk', 'walks')} on this device${c ? `, ${c} in progress` : ''}.`],
+  [/^(\d+) visites? sur cet appareil,$/, (m, n) => pl(n, 'walk', 'walks') + ' on this device,'],
+  [/^(\d+) visites? sur cet appareil$/, (m, n) => pl(n, 'walk', 'walks') + ' on this device'],
+  [/^(\d+) sélectionnées?$/, '$1 selected'],
+  [/^(\d\d\/\d\d\/\d{4})(?: à (\d\d:\d\d))?, (.+)$/, (m, d, h, n) => `${d}${h ? ' at ' + h : ''}, ${n}`],
+  [/^(Rapide|Complète|Ciblée), (\d+)\/(\d+) vus$/, (m, md, a, b) => `${T(md)}, ${a}/${b} seen`],
+  [/^(\d+) % conformes$/, '$1% compliant'],
+  [/^(\d+) zones? visitées?$/, (m, n) => pl(n, 'area', 'areas') + ' visited'],
+  [/^Fréquence cible : une visite tous les (\d+) jours par zone \(réglable dans Paramètres\)\. (?:(\d+) zones? à visiter\.|Toutes les zones sont à jour\.)$/, (m, f, n) => `Target frequency: one walk every ${f} days per area (adjustable in Settings). ${n ? pl(n, 'area', 'areas') + ' to visit.' : 'All areas are up to date.'}`],
+  [/^(\d\d\/\d\d\/\d{4}), il y a (\d+) j$/, '$1, $2 days ago'],
+  [/^(\d+) visites? sur la période, (.+) de pratiques conformes$/, (m, n, p) => `${pl(n, 'walk', 'walks')} over the period, ${T(p)} compliant practices`],
+  [/^sur (\d+) observations?\. (.*)$/, (m, n, z) => `out of ${pl(n, 'observation', 'observations')}. ${z.split(', ').map(x => T(x)).join(', ')}`],
+  [/^Le suivi se fait dans Fabasoft ; ce tableau vérifie seulement que chaque écart a une suite et, si besoin, une référence\. (\d+) références? Fabasoft à reporter\.$/, (m, n) => `Tracking is done in Fabasoft; this table only checks that each gap has a follow-up and, where needed, a reference. ${pl(n, 'Fabasoft reference', 'Fabasoft references')} to record.`],
+  [/^(\d\d\/\d\d\/\d{4}), (.+)\. Suite : (.*?)(,?)$/, (m, d, z, s, c) => { const [x, ...r] = s.split(', '); return `${d}, ${T(z)}. Follow-up: ${T(x)}${r.length ? ', ' + r.join(', ') : ''}${c}`; }],
+  [/^(.+), (\d\d\/\d\d\/\d{4}) : (.*)$/, (m, z, d, t) => `${T(z)}, ${d}: ${T(t)}`],
+  [/^Atelier : (\d+) points dont (\d+) essentiels\. Bureau : (\d+) points dont (\d+) essentiels\. Le mode rapide ne reprend que les points essentiels\.$/, 'Shop floor: $1 points including $2 key points. Office: $3 points including $4 key points. Quick mode only includes the key points.'],
+  [/^Modifier (.+)$/, 'Edit $1'],
+  [/^Point (.+) supprimé\.$/, 'Point $1 deleted.'],
+  [/^L'identifiant (.+) existe déjà\.$/, 'ID $1 already exists.'],
+  [/^(\d+) points utilisent ce thème$/, '$1 points use this theme'],
+  [/^Le code (.+) existe déjà\.$/, 'Code $1 already exists.'],
+  [/^Le matricule entre dans le numéro de chaque visite \(prochain numéro : (.+)\), dans les comptes rendus, les exports et le pilotage\. L'adresse e-mail reçoit les rapports\.$/, 'The employee ID is part of each walk number (next number: $1) and appears in reports, exports and monitoring. The email address receives the reports.'],
+  [/^(\d+) photos?$/, (m, n) => pl(n, 'photo', 'photos')],
+  [/^Le matricule (.+) est déjà attribué à (.+)\.$/, 'Employee ID $1 is already assigned to $2.'],
+  [/^Enregistrement impossible : (.*)$/, 'Saving failed: $1'],
+  [/^Visite terrain (\S+), (.+)$/, (m, n, z) => `Gemba walk ${n}, ${T(z)}`],
+  [/^Compte rendu de visite terrain (.+)$/, 'Gemba walk report $1'],
+  [/^(\d+) points? lus, dont (\d+) déjà présents dans le référentiel actuel(?: et (\d+) (?:nouveau thème|nouveaux thèmes))?\.$/, (m, n, k, t) => `${pl(n, 'point', 'points')} read, ${k} already in the current practices${t ? ` and ${pl(t, 'new theme', 'new themes')}` : ''}.`],
+  [/^Import impossible : (.*)$/, (m, e) => 'Import failed: ' + T(e)],
+  [/^Annuaire : (\d+) (?:personne ajoutée|personnes ajoutées), (\d+) mises? à jour\.$/, (m, a, u) => `Directory: ${pl(a, 'person', 'people')} added, ${u} updated.`],
+  [/^Le fichier contient un référentiel de (\d+) points?, (\d+) zones?, un annuaire de (\d+) personnes? et les paramètres du site(, dont le service d’envoi des rapports)?\.$/, (m, p, z, a, s) => `The file contains practices with ${pl(p, 'point', 'points')}, ${pl(z, 'area', 'areas')}, a directory of ${pl(a, 'person', 'people')} and the site settings${s ? ', including the report sending service' : ''}.`],
+  [/^(\d+) (?:visite ajoutée|visites ajoutées), (\d+) mises? à jour(?:, (\d+) déjà à jour)?\.$/, (m, a, u, s) => `${pl(a, 'walk', 'walks')} added, ${u} updated${s ? `, ${s} already up to date` : ''}.`],
+  [/^Le fichier contient (\d+) visites?, un référentiel de (\d+) points? et des paramètres\.$/, (m, v, p) => `The file contains ${pl(v, 'walk', 'walks')}, practices with ${pl(p, 'point', 'points')} and settings.`],
+  [/^Garder cette adresse pour (.+)$/, 'Keep this address for $1'],
+  [/^Rapport envoyé à (.+)\.$/, 'Report sent to $1.'],
+  [/^La demande est partie mais le service d'envoi n'a pas confirmé la réception\. Le mail est peut-être déjà arrivé : vérifier la boîte (.+) avant de renvoyer\.$/, 'The request went out but the sending service did not confirm receipt. The email may already have arrived: check the mailbox $1 before sending again.'],
+  [/^Le service d'envoi a refusé la demande \((.+)\) : envoi depuis cet appareil\.$/, 'The sending service refused the request ($1): sending from this device.'],
+  [/^Envoi impossible : (.*)$/, 'Sending failed: $1'],
+  [/^Test envoyé à (.+) : vérifier la réception et la pièce jointe\.$/, 'Test sent to $1: check that it arrives with the attachment.'],
+  [/^Échec du test \((.+)\)\.$/, 'Test failed ($1).'],
+  [/^(\d+) visites supprimées\.$/, '$1 walks deleted.'],
+  [/^Visite (.+) supprimée\.$/, 'Walk $1 deleted.'],
+  [/^Supprimer (\d+) visites$/, 'Delete $1 walks'],
+  [/^Supprimer la visite (.+)$/, 'Delete walk $1'],
+  [/^(\d+) visites ont été modifiées depuis le dernier export\.$/, '$1 walks have been changed since the last export.'],
+  [/^Grille mise à jour : (\d+) points?\.$/, (m, n) => `Checklist updated: ${pl(n, 'point', 'points')}.`],
+  [/^(.+) est utilisée par des visites : elle est désactivée plutôt que retirée\.$/, (m, z) => `${T(z)} is used by walks: it is disabled rather than removed.`],
+  [/^Photo non ajoutée : (.*)$/, (m, e) => 'Photo not added: ' + T(e)],
+  [/^.*\bmatricule .*$/, m => m.replace(/\bmatricule /g, 'employee ID ').replace(', rapport envoyé', ', report sent')],
+  [/^.*, rapport envoyé$/, m => m.replace(', rapport envoyé', ', report sent')],
+  [/^(.+) \((\d+)\)$/, (m, a, b) => { const t = T(a); return t === a ? m : t + ' (' + b + ')'; }],
+  [/^.+, .+$/, trList(', ')]
+];
+/* ---------- moteur de traduction (identique dans les trois outils) ---------- */
+function T(s) {
+  if (LANG !== 'en' || s == null || s === '') return s;
+  const str = String(s), k = str.replace(/\s+/g, ' ').trim();
+  if (!k) return str;
+  let out = null;
+  if (Object.prototype.hasOwnProperty.call(I18N_EN, k)) out = I18N_EN[k];
+  else for (const [re, rep] of I18N_RX) { if (re.test(k)) { const r = k.replace(re, rep); if (r !== k) { out = r; break; } } }
+  if (out === null || out === k) return str;
+  const m = /^(\s*)[\s\S]*?(\s*)$/.exec(str);
+  return m[1] + out + m[2];
+}
+/* Texte d'un document HTML ou XML (rapports, Word, Excel, Visio) */
+function trMarkup(s) {
+  if (LANG !== 'en') return s;
+  const unx = x => x.replace(/&(amp|lt|gt|quot|#39|apos);/g, (m, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" }[e]));
+  const rex = x => x.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return String(s).replace(/>([^<>]+)</g, (m, txt) => { const raw = unx(txt), t = T(raw); return t === raw ? m : '>' + rex(t) + '<'; });
+}
+const I18N_ATTR = ['title', 'placeholder', 'aria-label', 'alt', 'label', 'data-l'];
+const I18N_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA']);
+function trText(n) {
+  const p = n.parentNode; if (!p || I18N_SKIP.has(p.nodeName)) return;
+  const t = T(n.data); if (t === n.data) return;
+  if (p.nodeName === 'OPTION' && !p.hasAttribute('value')) p.setAttribute('value', p.textContent);
+  n.data = t;
+}
+function trAttrs(el) {
+  for (const a of I18N_ATTR) { const v = el.getAttribute(a); if (v) { const t = T(v); if (t !== v) el.setAttribute(a, t); } }
+}
+function trTree(root) {
+  if (root.nodeType === 3) { const p = root.parentElement; if (p && !p.closest('[translate="no"]')) trText(root); return; }
+  if (root.nodeType !== 1 || root.closest('[translate="no"]')) return;
+  if (root.nodeName === 'TEXTAREA') { trAttrs(root); return; }
+  if (I18N_SKIP.has(root.nodeName)) return;
+  trAttrs(root);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: n => {
+      if (n.nodeType !== 1) return NodeFilter.FILTER_ACCEPT;
+      if (n.getAttribute('translate') === 'no') return NodeFilter.FILTER_REJECT;
+      if (n.nodeName === 'TEXTAREA') { trAttrs(n); return NodeFilter.FILTER_REJECT; }
+      return I18N_SKIP.has(n.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    } });
+  let n; while ((n = w.nextNode())) { if (n.nodeType === 3) trText(n); else trAttrs(n); }
+}
+if (LANG === 'en') {
+  document.title = T(document.title);
+  trTree(document.body);
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      if (m.type === 'childList') m.addedNodes.forEach(n => trTree(n));
+      else if (m.type === 'characterData') { const p = m.target.parentElement; if (p && !p.closest('[translate="no"]')) trText(m.target); }
+      else if (!m.target.closest('[translate="no"]')) { const v = m.target.getAttribute(m.attributeName); if (v) { const t = T(v); if (t !== v) m.target.setAttribute(m.attributeName, t); } }
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: I18N_ATTR });
+  for (const k of ['alert', 'confirm', 'prompt']) { const f = window[k]; window[k] = function (msg, ...r) { return f.call(window, T(msg), ...r); }; }
+}
+/* bouton FR / EN de l'en-tête : la page est rechargée dans l'autre langue (données déjà enregistrées) */
+(function () {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ghost'; b.id = 'btn-lang'; b.setAttribute('translate', 'no');
+  b.textContent = LANG === 'en' ? 'FR' : 'EN';
+  b.title = LANG === 'en' ? 'Passer en français' : 'Switch to English';
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('lang', LANG === 'en' ? 'fr' : 'en'); } catch (e) { /* stockage bloqué */ }
+    const u = new URL(location.href); u.searchParams.delete('lang');
+    if (u.href === location.href) location.reload(); else location.replace(u.href);
+  });
+  const th = document.getElementById('btn-theme');
+  if (th) th.parentNode.insertBefore(b, th); else document.querySelector('header').appendChild(b);
+  const show = () => document.documentElement.classList.remove('i18n-wait');
+  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(show));
+  setTimeout(show, 1500);
+})();
+</script>
+<script>
 /* ==========================================================================
    1. Constantes et référentiel par défaut
    ========================================================================== */
@@ -691,9 +1591,10 @@ function defaultStore() {
   return {
     app: 'gemba-terrain', version: APP_VERSION,
     settings: Object.assign({}, DEFAULT_SETTINGS),
-    themes: clone(DEFAULT_THEMES),
-    items: DEFAULT_ITEMS.map(i => Object.assign({}, i, { actif: 1 })),
-    zones: DEFAULT_ZONES.map((z, n) => Object.assign({ id: 'z' + (n + 1) }, z, { actif: 1 })),
+    /* grille, thèmes et zones par défaut dans la langue de l'interface */
+    themes: clone(DEFAULT_THEMES).map(t => Object.assign(t, { l: T(t.l) })),
+    items: DEFAULT_ITEMS.map(i => Object.assign({}, i, { t: T(i.t), r: T(i.r), q: T(i.q), actif: 1 })),
+    zones: DEFAULT_ZONES.map((z, n) => Object.assign({ id: 'z' + (n + 1) }, z, { nom: T(z.nom), actif: 1 })),
     annuaire: [],
     visits: []
   };
@@ -1261,10 +2162,11 @@ function renderSynthese(v) {
 }
 function proposeSynth(v) {
   const bp = findings(v, 'BP'), e = findings(v, 'E'), am = findings(v, 'AM'), st = stats(v);
-  const line = ({ it, o }) => `- ${it.t || 'Observation'}${o.c ? ' : ' + o.c.replace(/\s+/g, ' ').trim() : ''}`;
+  const en = LANG === 'en', sep = en ? ': ' : ' : ';
+  const line = ({ it, o }) => `- ${T(it.t) || 'Observation'}${o.c ? sep + o.c.replace(/\s+/g, ' ').trim() : ''}`;
   const full = [...st.byTh.values()].filter(t => t.eval >= 2 && t.taux === 100).map(t => t.l);
-  const forts = [...bp.map(line), ...(full.length ? [`- Aucun écart relevé sur : ${full.join(', ').toLowerCase()}`] : [])].join('\n');
-  const amel = [...e.map(x => line(x) + ' (écart)'), ...am.map(line)].join('\n');
+  const forts = [...bp.map(line), ...(full.length ? [`- ${en ? 'No gap found on: ' : 'Aucun écart relevé sur : '}${full.map(l => T(l)).join(', ').toLowerCase()}`] : [])].join('\n');
+  const amel = [...e.map(x => line(x) + (en ? ' (gap)' : ' (écart)')), ...am.map(line)].join('\n');
   return { forts, ameliorer: amel };
 }
 
@@ -1331,7 +2233,21 @@ function reportHTML(v, withPhotos) {
   h += `<p style="color:#5f6b7a;font-size:12px;margin-top:10px">Les observations portent sur des pratiques et non sur des personnes. Les écarts sont enregistrés et suivis dans Fabasoft.</p>`;
   return h;
 }
+/* Message court en anglais quand l'interface est en anglais */
+function shortMessageEN(v) {
+  const d = reportData(v), st = d.st;
+  const L = [`Gemba walk ${v.numero}: ${T(v.zone)} (${T(TYPES[v.type]).toLowerCase()}), ${fmtDate(v.date)}`,
+    `Visitor: ${[v.visiteur, v.matricule ? 'employee ID ' + v.matricule : ''].filter(Boolean).join(', ')}`,
+    `${st.done} points seen out of ${st.total}, ${st.taux === null ? 'n/a' : st.taux + '%'} compliant practices`];
+  const one = ({ it, o }) => `- ${it.id} ${T(it.t)}${o.c ? ': ' + o.c.replace(/\s+/g, ' ').trim() : ''}`;
+  if (d.E.length) { L.push('', `Gaps (${d.E.length}${st.Es ? `, including ${st.Es} safety-related` : ''})`); d.E.forEach(x => L.push(one(x) + (x.o.suite ? ` [${T(SUITE_LAB[x.o.suite])}${x.o.fab ? ' ' + x.o.fab : ''}]` : ''))); }
+  if (d.AM.length) { L.push('', `To improve (${d.AM.length})`); d.AM.forEach(x => L.push(one(x))); }
+  if (d.BP.length) { L.push('', `Good practices (${d.BP.length})`); d.BP.forEach(x => L.push(one(x))); }
+  L.push('', `Feedback given to the teams: ${v.synth.retour ? 'yes' : 'no'}`);
+  return L.join('\n');
+}
 function shortMessage(v) {
+  if (LANG === 'en') return shortMessageEN(v);
   const d = reportData(v), st = d.st;
   const L = [`Visite terrain ${v.numero} : ${v.zone} (${TYPES[v.type].toLowerCase()}), ${fmtDate(v.date)}`,
     `Visiteur : ${personLabel(v.visiteur, v.matricule)}`,
@@ -1638,7 +2554,7 @@ const EX_COMMENTS = {
 function loadExamples() {
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const plan = [[118, 'z2', 'complet'], [96, 'z3', 'rapide'], [83, 'z10', 'rapide'], [61, 'z4', 'complet'], [47, 'z9', 'rapide'], [33, 'z2', 'rapide'], [20, 'z5', 'complet'], [9, 'z11', 'rapide']];
-  const mine = me(), exA = { nom: 'Claire Exemple', matricule: 'EX0001', fonction: "Chef d'atelier", email: '' }, exB = { nom: 'Marc Exemple', matricule: 'EX0002', fonction: 'Responsable méthodes', email: '' };
+  const mine = me(), exA = { nom: 'Claire Exemple', matricule: 'EX0001', fonction: T("Chef d'atelier"), email: '' }, exB = { nom: 'Marc Exemple', matricule: 'EX0002', fonction: T('Responsable méthodes'), email: '' };
   plan.forEach(([ago, zid, mode], n) => {
     const z = store.zones.find(x => x.id === zid) || activeZones()[n % activeZones().length]; if (!z) return;
     const d = new Date(); d.setDate(d.getDate() - ago);
@@ -1646,13 +2562,13 @@ function loadExamples() {
     const who = n % 3 === 2 ? exB : (mine && mine.matricule ? mine : exA);
     Object.assign(v, { visiteur: who.nom, matricule: who.matricule, fonction: who.fonction || '', email: who.email || '' });
     v.numero = ['EX', v.date.slice(0, 4), who.matricule, pad(n + 1)].join('-'); v.exemple = true;
-    v.rencontres = z.type === 'A' ? "Opérateur régleur, chef d'équipe" : 'Deux techniciens, responsable de service';
+    v.rencontres = T(z.type === 'A' ? "Opérateur régleur, chef d'équipe" : 'Deux techniciens, responsable de service');
     v.items.forEach(it => {
       const x = rnd(), r = x < 0.06 ? 'E' : x < 0.17 ? 'AM' : x < 0.24 ? 'BP' : x < 0.30 ? 'NA' : 'C';
       const o = { r, t: v.date + 'T10:00:00' };
-      if (r === 'E') { o.c = EX_COMMENTS.E[it.id] || 'Écart constaté sur la pratique attendue (donnée d’exemple).'; o.ai = it.s ? 'Responsable prévenu, pièce mise en attente.' : ''; o.suite = isCFSI(it) ? 'cfsi' : ['fnc', 'resp', 'place'][n % 3]; o.fab = o.suite === 'fnc' && n % 2 ? 'FNC-' + (2400 + n * 7) : ''; }
-      if (r === 'AM') o.c = EX_COMMENTS.AM;
-      if (r === 'BP') o.c = EX_COMMENTS.BP[it.id] || 'Pratique exemplaire à partager (donnée d’exemple).';
+      if (r === 'E') { o.c = T(EX_COMMENTS.E[it.id] || 'Écart constaté sur la pratique attendue (donnée d’exemple).'); o.ai = it.s ? T('Responsable prévenu, pièce mise en attente.') : ''; o.suite = isCFSI(it) ? 'cfsi' : ['fnc', 'resp', 'place'][n % 3]; o.fab = o.suite === 'fnc' && n % 2 ? 'FNC-' + (2400 + n * 7) : ''; }
+      if (r === 'AM') o.c = T(EX_COMMENTS.AM);
+      if (r === 'BP') o.c = T(EX_COMMENTS.BP[it.id] || 'Pratique exemplaire à partager (donnée d’exemple).');
       v.obs[it.id] = o;
     });
     v.synth.retour = n % 4 !== 1;
@@ -1703,7 +2619,7 @@ function makeZip(files, mime) {
   const enc = new TextEncoder(), parts = [], central = []; let off = 0;
   const d = new Date(), dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF, dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
   for (const f of files) {
-    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(trMarkup(f.data)) : f.data, crc = crc32(data);
     const lh = new DataView(new ArrayBuffer(30));
     lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
     lh.setUint16(10, dt, true); lh.setUint16(12, dd, true); lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true); lh.setUint32(22, data.length, true);
@@ -1759,7 +2675,7 @@ const W = {
 };
 const DOCX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>
+<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="${LANG === 'en' ? 'en-GB' : 'fr-FR'}"/></w:rPr></w:rPrDefault>
 <w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="60"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr></w:style>
@@ -1854,7 +2770,7 @@ function buildXLSX(sheets) {
     x += `</sheetData><autoFilter ref="A1:${last}${nrows}"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/></worksheet>`;
     return x;
   });
-  const names = sheets.map(s => s.name.replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31));
+  const names = sheets.map(s => T(s.name).replace(/[\[\]:*?\/\\]/g, ' ').slice(0, 31));
   const files = [
     { name: '[Content_Types].xml', data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sx.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>` },
@@ -1998,10 +2914,10 @@ function parseCSV(text) {
   return rows.filter(r => r.some(c => String(c).trim()));
 }
 const REF_HEADERS = {
-  id: ['id', 'identifiant', 'code point', 'point'], th: ['theme', 'code theme'], thl: ['libelle du theme', 'theme libelle', 'nom du theme'],
-  sc: ['lieu', 'perimetre', 'portee'], e: ['essentiel', 'mode rapide'], s: ['surete', 'lie a la surete'],
-  t: ['pratique attendue', 'pratique', 'libelle', 'exigence', 'critere'], r: ['regarder', 'reperes', 'quoi regarder', 'ce qu il faut regarder'],
-  q: ['demander', 'question', 'question a poser'], ref: ['reference', 'ref', 'references'], actif: ['actif', 'active']
+  id: ['id', 'identifiant', 'code point', 'point'], th: ['theme', 'code theme'], thl: ['libelle du theme', 'theme libelle', 'nom du theme', 'theme label'],
+  sc: ['lieu', 'perimetre', 'portee', 'place'], e: ['essentiel', 'mode rapide', 'key'], s: ['surete', 'lie a la surete', 'safety'],
+  t: ['pratique attendue', 'pratique', 'libelle', 'exigence', 'critere', 'expected practice'], r: ['regarder', 'reperes', 'quoi regarder', 'ce qu il faut regarder', 'look at'],
+  q: ['demander', 'question', 'question a poser', 'ask'], ref: ['reference', 'ref', 'references'], actif: ['actif', 'active']
 };
 const yes = v => ['oui', 'o', 'yes', 'y', 'x', '1', 'vrai', 'true'].includes(norm(v));
 function rowsToItems(rows) {
@@ -2015,7 +2931,7 @@ function rowsToItems(rows) {
     const found = store.themes.concat(newThemes).find(t => (c && (norm(t.k) === norm(c) || norm(t.l) === norm(c))) || (l && norm(t.l) === norm(l)));
     if (found) return found.k;
     const k = (c && c.length <= 6 ? c : (l || c).replace(/[^A-Za-z]/g, '').slice(0, 4)).toUpperCase() || 'DIV';
-    newThemes.push({ k, l: l || c || 'Divers' }); return k;
+    newThemes.push({ k, l: l || c || T('Divers') }); return k;
   };
   rows.slice(1).forEach((r, n) => {
     const g = k => map[k] === undefined ? '' : String(r[map[k]] ?? '').trim();
@@ -2031,7 +2947,7 @@ async function importRef(file) {
   try {
     let rows;
     if (/\.csv$/i.test(file.name)) rows = parseCSV(await file.text());
-    else { const sheets = await readXLSX(await file.arrayBuffer()); const sh = sheets.find(s => norm(s.name).startsWith('referentiel')) || sheets[0]; rows = sh ? sh.rows : []; }
+    else { const sheets = await readXLSX(await file.arrayBuffer()); const sh = sheets.find(s => norm(s.name).startsWith('referentiel') || norm(s.name).startsWith('practices')) || sheets[0]; rows = sh ? sh.rows : []; }
     const { items, newThemes } = rowsToItems(rows);
     const known = items.filter(i => store.items.some(x => x.id === i.id)).length;
     modal('Importer le référentiel', `<p style="margin-top:0">${plural(items.length, 'point')} lus, dont ${known} déjà présents dans le référentiel actuel${newThemes.length ? ` et ${plural(newThemes.length, 'nouveau thème', 'nouveaux thèmes')}` : ''}.</p>
@@ -2046,13 +2962,13 @@ const ANN_COLS = [{ h: 'Matricule', w: 12 }, { h: 'Nom et prénom', w: 26 }, { h
 function exportAnnuaireXLSX() {
   return download(buildXLSX([{ name: 'Annuaire', cols: ANN_COLS, rows: store.annuaire.map(p => [p.matricule, p.nom, p.fonction, p.service, p.email]) }]), `Gemba_annuaire_${isoLocal()}.xlsx`);
 }
-const ANN_HEADERS = { matricule: ['matricule', 'mat', 'id', 'identifiant', 'numero', 'n matricule', 'numero de matricule'], nom: ['nom et prenom', 'nom prenom', 'nom complet', 'nom', 'collaborateur'],
-  prenom: ['prenom'], fonction: ['fonction', 'poste', 'emploi'], service: ['service', 'departement', 'equipe'], email: ['adresse e mail', 'e mail', 'email', 'mail', 'courriel', 'adresse mail', 'adresse e-mail'] };
+const ANN_HEADERS = { matricule: ['matricule', 'mat', 'id', 'identifiant', 'numero', 'n matricule', 'numero de matricule', 'employee id'], nom: ['nom et prenom', 'nom prenom', 'nom complet', 'nom', 'collaborateur', 'full name', 'name'],
+  prenom: ['prenom'], fonction: ['fonction', 'poste', 'emploi', 'position'], service: ['service', 'departement', 'equipe', 'department'], email: ['adresse e mail', 'e mail', 'email', 'mail', 'courriel', 'adresse mail', 'adresse e-mail', 'email address'] };
 async function importAnnuaire(file) {
   try {
     let rows;
     if (/\.csv$/i.test(file.name)) rows = parseCSV(await file.text());
-    else { const sh = await readXLSX(await file.arrayBuffer()); rows = (sh.find(x => norm(x.name).startsWith('annuaire')) || sh[0] || { rows: [] }).rows; }
+    else { const sh = await readXLSX(await file.arrayBuffer()); rows = (sh.find(x => norm(x.name).startsWith('annuaire') || norm(x.name).startsWith('directory')) || sh[0] || { rows: [] }).rows; }
     if (rows.length < 2) throw new Error('aucune ligne lue');
     const head = rows[0].map(h => norm(h).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()), map = {};
     for (const [k, names] of Object.entries(ANN_HEADERS)) { const i = head.findIndex(h => names.includes(h)); if (i >= 0) map[k] = i; }
@@ -2206,7 +3122,7 @@ const pdfN = x => (Math.round(x * 100) / 100).toString();
 class PdfDoc {
   constructor(footer) {
     this.W = 595.28; this.H = 841.89; this.ml = 42; this.mr = 42; this.mt = 46; this.mb = 56;
-    this.pages = []; this.images = []; this.footer = footer || ''; this.newPage();
+    this.pages = []; this.images = []; this.footer = T(footer || ''); this.newPage();
   }
   get cw() { return this.W - this.ml - this.mr; }
   newPage() { this.cur = []; this.pages.push(this.cur); this.y = this.H - this.mt; }
@@ -2221,7 +3137,7 @@ class PdfDoc {
   hline(x1, x2, y, color, w) { this.cur.push(`${pdfRgb(color)} RG ${w || 0.6} w ${pdfN(x1)} ${pdfN(y)} m ${pdfN(x2)} ${pdfN(y)} l S`); }
   para(text, o = {}) {
     const size = o.size || 9.5, lh = size * 1.32, ind = o.indent || 0;
-    for (const line of pdfWrap(text, this.cw - ind, o.bold, size)) {
+    for (const line of pdfWrap(T(text), this.cw - ind, o.bold, size)) {
       this.need(lh);
       this.text(line, this.ml + ind, this.y - size, size, o.bold, o.color);
       this.y -= lh;
@@ -2230,14 +3146,14 @@ class PdfDoc {
   }
   heading(t) {
     this.need(70); this.y -= 10;
-    this.text(pdfCodes(t), this.ml, this.y - 12.5, 12.5, true, '2F3E4D');
+    this.text(pdfCodes(T(t)), this.ml, this.y - 12.5, 12.5, true, '2F3E4D');
     this.y -= 17; this.hline(this.ml, this.ml + this.cw, this.y, 'C3C9D1', 0.8); this.y -= 7;
   }
   table(cols, rows, o = {}) {
     const size = o.size || 8.5, lh = size * 1.25, pad = 3, widths = cols.map(c => c.w * this.cw);
     const prep = (cells, hdr) => cells.map((c, i) => {
       const v = c && typeof c === 'object' ? c : { t: c };
-      return { lines: pdfWrap(v.t, widths[i] - 2 * pad, hdr || v.bold, size), bold: hdr || v.bold, color: v.color, fill: hdr ? 'E4E8EC' : v.fill };
+      return { lines: pdfWrap(T(v.t), widths[i] - 2 * pad, hdr || v.bold, size), bold: hdr || v.bold, color: v.color, fill: hdr ? 'E4E8EC' : v.fill };
     });
     const head = o.header === false ? null : prep(cols.map(c => c.h), true);
     const headH = head ? Math.max(...head.map(c => c.lines.length)) * lh + 2 * pad : 0;
@@ -2290,14 +3206,14 @@ class PdfDoc {
     const xo = this.images.length ? `/XObject << ${this.images.map((_, i) => `/Im${i + 1} ${idImg(i)} 0 R`).join(' ')} >>` : '';
     this.pages.forEach((ops, i) => {
       const foot = [`${pdfRgb('C3C9D1')} RG 0.5 w ${this.ml} 40 m ${pdfN(this.W - this.mr)} 40 l S`];
-      const fl = pdfCodes(this.footer), fr = pdfCodes(`Page ${i + 1} sur ${n}`);
+      const fl = pdfCodes(this.footer), fr = pdfCodes(`Page ${i + 1} ${LANG === 'en' ? 'of' : 'sur'} ${n}`);
       foot.push(`BT /F1 7.5 Tf ${pdfRgb('5F6B7A')} rg ${this.ml} 28 Td ${pdfStr(fl)} Tj ET`);
       foot.push(`BT /F1 7.5 Tf ${pdfRgb('5F6B7A')} rg ${pdfN(this.W - this.mr - pdfW(fr, false, 7.5))} 28 Td ${pdfStr(fr)} Tj ET`);
       const content = ops.concat(foot).join('\n');
       obj(idPage(i), `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> ${xo} >> /Contents ${idCont(i)} 0 R >>`);
       obj(idCont(i), `<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
     });
-    obj(idInfo, `<< /Title ${pdfStr(pdfCodes(meta.title || ''))} /Author ${pdfStr(pdfCodes(meta.author || ''))} /Creator (Visite terrain Gemba) /Producer (Visite terrain Gemba) >>`);
+    obj(idInfo, `<< /Title ${pdfStr(pdfCodes(T(meta.title || '')))} /Author ${pdfStr(pdfCodes(T(meta.author || '')))} /Creator (Visite terrain Gemba) /Producer (Visite terrain Gemba) >>`);
     const xref = pos, size = idInfo + 1;
     let x = `xref\n0 ${size}\n0000000000 65535 f \n`;
     for (let i = 1; i < size; i++) x += String(offs[i]).padStart(10, '0') + ' 00000 n \n';
@@ -2337,8 +3253,8 @@ async function buildPdf(v) {
     const cells = [];
     for (const { p: ph, it, o } of d.photos) {
       const data = await Photos.get(ph.id);
-      const capLines = pdfWrap(`${it.id}, ${RLAB[o.r] || 'Note'} : ${it.t || ''}`, colW, false, cap).slice(0, 3);
-      if (!data) { cells.push({ capLines: pdfWrap(`${it.id} : photo absente sur cet appareil`, colW, false, cap), h: 0 }); continue; }
+      const capLines = pdfWrap(T(`${it.id}, ${RLAB[o.r] || 'Note'} : ${it.t || ''}`), colW, false, cap).slice(0, 3);
+      if (!data) { cells.push({ capLines: pdfWrap(T(`${it.id} : photo absente sur cet appareil`), colW, false, cap), h: 0 }); continue; }
       const w = ph.w || 4, h = ph.h || 3, k = Math.min(colW / w, maxH / h);
       cells.push({ bytes: dataUrlBytes(data), w, h, dw: w * k, dh: h * k, capLines });
     }
@@ -2366,8 +3282,8 @@ async function buildPdf(v) {
    puis partage du téléphone, puis fichiers enregistrés et mail prérempli.
    ========================================================================== */
 const recipient = v => String(v.email || '').trim() || (cleanMat(v.matricule) && personByMat(v.matricule) ? personByMat(v.matricule).email : '') || '';
-const mailSubject = v => `Visite terrain ${v.numero} : ${v.zone}, ${fmtDate(v.date)}`;
-const mailText = v => `Bonjour,\n\nVoici le compte rendu de la visite terrain ${v.numero}, en pièces jointes (Word et PDF).\n\n${shortMessage(v)}\n\n${store.settings.organisation}${store.settings.site ? ', ' + store.settings.site : ''}`;
+const mailSubject = v => LANG === 'en' ? `Gemba walk ${v.numero}: ${T(v.zone)}, ${fmtDate(v.date)}` : `Visite terrain ${v.numero} : ${v.zone}, ${fmtDate(v.date)}`;
+const mailText = v => LANG === 'en' ? `Hello,\n\nPlease find attached the report of Gemba walk ${v.numero} (Word and PDF).\n\n${shortMessage(v)}\n\n${store.settings.organisation}${store.settings.site ? ', ' + store.settings.site : ''}` : `Bonjour,\n\nVoici le compte rendu de la visite terrain ${v.numero}, en pièces jointes (Word et PDF).\n\n${shortMessage(v)}\n\n${store.settings.organisation}${store.settings.site ? ', ' + store.settings.site : ''}`;
 const mailHTML = v => `<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f2933">${esc(mailText(v)).replace(/\n/g, '<br>')}</div>`;
 async function blobB64(blob) {
   const u8 = new Uint8Array(await blob.arrayBuffer()); let s = '';
@@ -2451,7 +3367,7 @@ async function sendViaDevice(v, to, files) {
   }
   for (const f of files) await download(f.blob, f.name, true);
   const body = text.length > 1400 ? text.slice(0, 1400) + '\n[...]' : text;
-  const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}${store.settings.copie ? '&cc=' + encodeURIComponent(store.settings.copie) : ''}&body=${encodeURIComponent(body + '\n\nPièces jointes à ajouter : ' + files.map(f => f.name).join(' et '))}`;
+  const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}${store.settings.copie ? '&cc=' + encodeURIComponent(store.settings.copie) : ''}&body=${encodeURIComponent(body + (LANG === 'en' ? '\n\nAttachments to add: ' : '\n\nPièces jointes à ajouter : ') + files.map(f => f.name).join(LANG === 'en' ? ' and ' : ' et '))}`;
   const a = document.createElement('a'); a.href = href; document.body.appendChild(a); a.click(); a.remove();
   logSend(v, to, 'Mail prérempli'); rerender();
   toast('Word et PDF enregistrés dans Téléchargements : les joindre au mail qui vient de s’ouvrir.', null, 8000);
@@ -2461,8 +3377,9 @@ async function testFlow() {
   if (!store.settings.flowUrl.trim()) { toast("Renseigner d'abord l'adresse du flux."); return; }
   if (Host.artifact()) { toast("Le test d'envoi n'est possible que depuis le fichier HTML ouvert dans un navigateur."); return; }
   if (!to) { toast('Renseigner votre adresse e-mail dans Mon identité pour recevoir le test.'); return; }
-  const txt = new Blob([`Test du service d'envoi de l'outil Visite terrain Gemba, ${new Date().toLocaleString('fr-FR')}.`], { type: 'text/plain' });
-  const r = await postFlow({ to, subject: "Test d'envoi, outil Visite terrain Gemba", text: "Ceci est un test : si ce mail arrive avec la pièce jointe, l'envoi des rapports fonctionne.", html: '<p>Ceci est un test : si ce mail arrive avec la pièce jointe, l’envoi des rapports fonctionne.</p>',
+  const en = LANG === 'en';
+  const txt = new Blob([en ? `Test of the sending service of the Gemba walk tool, ${new Date().toLocaleString('en-GB')}.` : `Test du service d'envoi de l'outil Visite terrain Gemba, ${new Date().toLocaleString('fr-FR')}.`], { type: 'text/plain' });
+  const r = await postFlow({ to, subject: en ? 'Sending test, Gemba walk tool' : "Test d'envoi, outil Visite terrain Gemba", text: en ? 'This is a test: if this email arrives with the attachment, report sending works.' : "Ceci est un test : si ce mail arrive avec la pièce jointe, l'envoi des rapports fonctionne.", html: en ? '<p>This is a test: if this email arrives with the attachment, report sending works.</p>' : '<p>Ceci est un test : si ce mail arrive avec la pièce jointe, l’envoi des rapports fonctionne.</p>',
     numero: 'TEST', matricule: p.matricule || '', visiteur: p.nom || '', zone: '', date: isoLocal(), attachments: [{ name: 'test-gemba.txt', contentType: 'text/plain', contentBytes: await blobB64(txt) }] });
   toast(r === 'ok' ? `Test envoyé à ${to} : vérifier la réception et la pièce jointe.` : r === 'unconfirmed' ? "Demande partie sans confirmation : vérifier la boîte, puis l'en-tête Access-Control-Allow-Origin de l'action Response." : `Échec du test (${r}).`, null, 9000);
 }
@@ -2473,7 +3390,27 @@ const FLOW_SCHEMA = JSON.stringify({ type: 'object', properties: {
   numero: { type: 'string' }, matricule: { type: 'string' }, visiteur: { type: 'string' }, zone: { type: 'string' }, date: { type: 'string' },
   attachments: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, contentType: { type: 'string' }, contentBytes: { type: 'string' } } } }
 } }, null, 2);
+/* Guide en anglais (les menus de Power Automate sont cités dans leur version anglaise) */
+function flowGuideEN() {
+  const step = t => `<li style="margin:0 0 8px">${t}</li>`;
+  modal('Setting up direct sending', `<p style="margin-top:0">One-click sending goes through a company Power Automate flow, which receives the report and sends it from Outlook. It is created once, by you or by IT.</p>
+  <ol style="padding-left:20px;margin:0 0 10px">
+    ${step('<b>Create</b>, then <b>Instant cloud flow</b>, trigger <b>When an HTTP request is received</b>. In <b>Who can trigger the flow?</b>, choose <b>Anyone</b>. POST method.')}
+    ${step('<b>Parse JSON</b> action: <b>Content</b> = <code>triggerBody()</code> (body received as text), <b>Schema</b> = the schema below.')}
+    ${step('If an access code is set in the tool: <b>Condition</b> <code>token</code> equal to the code, otherwise <b>Terminate</b>.')}
+    ${step('<b>Select</b> action: <b>From</b> = <code>attachments</code>; <b>Map</b>: <code>Name</code> = <code>item()?[\'name\']</code> and <code>ContentBytes</code> = <code>base64ToBinary(item()?[\'contentBytes\'])</code>.')}
+    ${step('<b>Send an email (V2)</b> (Office 365 Outlook), or <b>Send an email from a shared mailbox (V2)</b> to send from a quality mailbox: <b>To</b> = <code>to</code>, <b>CC</b> = <code>cc</code>, <b>Subject</b> = <code>subject</code>, <b>Body</b> = <code>html</code>, <b>Attachments</b> = output of the Select (button to enter the whole array).')}
+    ${step('<b>Response</b> action: <b>Status Code</b> 200, <b>Headers</b> <code>Access-Control-Allow-Origin</code> = <code>*</code>. Without this header the email is sent but the tool cannot confirm it.')}
+    ${step('Save, copy the trigger <b>HTTP URL</b> into Settings, then use <b>Test sending</b>.')}
+  </ol>
+  <p class="hint">Useful option: a <b>Create file</b> action (SharePoint) in a “Gemba” library archives each Word and PDF file, with the number and employee ID in the name.</p>
+  <p class="hint">Points to check with IT: the HTTP trigger is a premium connector (licence); the flow address can send emails, so it stays internal and the access code limits misuse; sending to addresses outside the company may be blocked by data protection rules.</p>
+  <label class="fld"><span>Schema for Parse JSON</span><textarea id="flow-schema" rows="8" style="font-family:Consolas,monospace;font-size:12px" readonly>${esc(FLOW_SCHEMA)}</textarea></label>`,
+  [{ l: 'Close' }, { l: 'Copy the schema', cls: 'primary', fn: async () => { try { await navigator.clipboard.writeText(FLOW_SCHEMA); toast('Schema copied.'); } catch (e) { $('#flow-schema').select(); toast('Copy refused: the schema is selected.'); } return false; } }]);
+}
 function flowGuide() {
+  if (LANG === 'en') return flowGuideEN();
+
   const step = (n, t) => `<li style="margin:0 0 8px">${t}</li>`;
   modal("Mettre en place l'envoi direct", `<p style="margin-top:0">L'envoi en un clic passe par un flux Power Automate de l'entreprise, qui reçoit le rapport et l'envoie depuis Outlook. À créer une fois, par toi ou par l'informatique. Les noms de menus sont ceux de l'interface anglaise.</p>
   <ol style="padding-left:20px;margin:0 0 10px">
@@ -2656,11 +3593,11 @@ document.addEventListener('click', async e => {
     case 'ref-import': $('#file-ref').value = ''; $('#file-ref').click(); break;
     case 'ref-reset': confirmBox('Rétablir le référentiel proposé', 'Les points et thèmes modifiés ou ajoutés sur cet appareil seront remplacés par le référentiel d’origine. Les visites déjà faites ne changent pas.', 'Rétablir', () => {
       const prev = { items: store.items, themes: store.themes };
-      store.items = DEFAULT_ITEMS.map(i => Object.assign({}, i, { actif: 1 })); store.themes = clone(DEFAULT_THEMES); persist(true); render();
+      { const d0 = defaultStore(); store.items = d0.items; store.themes = d0.themes; } persist(true); render();
       toast('Référentiel d’origine rétabli.', () => { store.items = prev.items; store.themes = prev.themes; persist(true); render(); });
     }, true); break;
     // Paramètres
-    case 'zone-add': store.zones.push({ id: uid('z'), nom: 'Nouvelle zone', type: 'A', actif: 1 }); persist(true); render(); { const ins = $$('[data-zf="nom"]'); const last = ins[ins.length - 1]; if (last) { last.focus(); last.select(); } } break;
+    case 'zone-add': store.zones.push({ id: uid('z'), nom: T('Nouvelle zone'), type: 'A', actif: 1 }); persist(true); render(); { const ins = $$('[data-zf="nom"]'); const last = ins[ins.length - 1]; if (last) { last.focus(); last.select(); } } break;
     case 'zone-del': { const z = store.zones[+b.dataset.n]; if (!z) break; const used = store.visits.some(x => x.zoneId === z.id);
       if (used) { z.actif = 0; toast(`${z.nom} est utilisée par des visites : elle est désactivée plutôt que retirée.`); } else store.zones.splice(+b.dataset.n, 1);
       persist(true); render(); break; }

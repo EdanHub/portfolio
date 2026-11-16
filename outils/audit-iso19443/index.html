@@ -17,6 +17,20 @@
     document.documentElement.setAttribute('data-theme', t);
   })();
 </script>
+<script>
+  /* Langue partagée avec le site (clé 'lang', ou ?lang=en dans l'adresse) ; anglais si le navigateur n'est pas en français */
+  (function () {
+    var q = /[?&]lang=(fr|en)\b/.exec(location.search), s = null;
+    try { if (q) localStorage.setItem('lang', q[1]); s = localStorage.getItem('lang'); } catch (e) { /* stockage bloqué */ }
+    var l = s === 'fr' || s === 'en' ? s : q ? q[1] : (/^fr\b/i.test(navigator.language || 'fr') ? 'fr' : 'en');
+    window.LANG = l;
+    document.documentElement.lang = l;
+    if (l === 'en') {
+      document.documentElement.classList.add('i18n-wait');
+      var st = document.createElement('style'); st.textContent = '.i18n-wait body{visibility:hidden}'; document.head.appendChild(st);
+    }
+  })();
+</script>
 <!--
   Gestionnaire de rapports d'audit interne (ISO 19443) : préparation, plan d'audit, terrain, constats et rapport.
   Le suivi des constats et des actions reste dans Fabasoft ; l'outil prépare et rédige.
@@ -417,6 +431,846 @@ table.plan-tbl input{padding:4px 6px}
 <input type="file" id="file-ref" accept=".xlsx,.xlsm,.csv,.txt" hidden>
 <iframe id="print-frame" title="Impression" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0"></iframe>
 <script>
+/* =====================================================================
+   LANGUE (FR / EN)
+   Le choix est partagé avec le site (localStorage 'lang', ou ?lang=en dans l'adresse).
+   L'interface est écrite en français. En anglais, chaque texte affiché dont le français
+   figure dans I18N_EN (ou correspond à un motif de I18N_RX) est remplacé à l'affichage ;
+   les valeurs enregistrées (étapes, processus, codes d'évaluation) restent en français.
+   Les exports passent par T() (texte) et trMarkup() (HTML imprimé, XML Word et Excel).
+   Ajouter un texte français à l'interface = ajouter sa traduction ici.
+   ===================================================================== */
+const I18N_EN = {
+  /* en-tête, navigation */
+  "Audit interne ISO 19443 · Outils qualité": "ISO 19443 internal audit · Quality tools",
+  "Retour aux outils": "Back to the tools",
+  "← Outils": "← Tools",
+  "Audit interne": "Internal audit",
+  "Préparation et rapport": "Preparation and report",
+  "Nouvel audit": "New audit",
+  "Base complète": "Full database",
+  "Exporter la base (JSON)": "Export the database (JSON)",
+  "Sauvegarde, ou partage via OneDrive ou SharePoint": "Backup, or sharing via OneDrive or SharePoint",
+  "Importer (JSON)": "Import (JSON)",
+  "Un audit reçu, plusieurs audits ou une base complète": "An audit received, several audits or a full database",
+  "Charger les exemples": "Load the samples",
+  "Trois audits fictifs pour découvrir l'outil": "Three fictitious audits to explore the tool",
+  "Mes audits": "My audits",
+  "en cours": "in progress",
+  "Référentiel": "Requirements",
+  "Paramètres": "Settings",
+  "Fermer": "Close",
+  "Impression": "Printing",
+
+  /* chapitres, types, étapes, appréciations */
+  "Contexte de l'organisme": "Context of the organization",
+  "Planification": "Planning",
+  "Réalisation des activités opérationnelles": "Operation",
+  "Évaluation des performances": "Performance evaluation",
+  "Amélioration": "Improvement",
+  "Hors référentiel": "Outside the requirements",
+  "Audit interne processus": "Internal process audit",
+  "Audit interne produit": "Internal product audit",
+  "Audit interne de suivi": "Internal follow-up audit",
+  "Audit fournisseur": "Supplier audit",
+  "Audit à blanc": "Mock audit",
+  "En préparation": "In preparation",
+  "Sur le terrain": "On site",
+  "Rapport en rédaction": "Report being written",
+  "Rapport émis": "Report issued",
+  "Exigences satisfaites": "Requirements met",
+  "Exigences satisfaites avec écarts mineurs": "Requirements met with minor gaps",
+  "Écarts significatifs : actions requises": "Significant gaps: action required",
+  "Exigences non satisfaites": "Requirements not met",
+
+  /* codes et libellés d'évaluation */
+  "PF": "S",
+  "PP": "OFI",
+  "NCm": "mNC",
+  "NCM": "MNC",
+  "NA": "N/A",
+  "Conforme": "Compliant",
+  "Point fort": "Strength",
+  "Piste de progrès": "Opportunity for improvement",
+  "Non-conformité mineure": "Minor nonconformity",
+  "Non-conformité majeure": "Major nonconformity",
+  "Non audité": "Not audited",
+  "Non évalué": "Not assessed",
+  "Les constats sont enregistrés dans Fabasoft, où le processus audité apporte sa réponse : correction, analyse des causes et actions correctives. L'efficacité des actions est vérifiée avant la clôture des constats.":
+    "Findings are recorded in Fabasoft, where the audited process provides its response: correction, cause analysis and corrective actions. The effectiveness of actions is checked before findings are closed.",
+
+  /* exigences par défaut (intitulés ISO 9001:2015) */
+  "Compréhension de l'organisme et de son contexte": "Understanding the organization and its context",
+  "Besoins et attentes des parties intéressées": "Needs and expectations of interested parties",
+  "Domaine d'application du système de management": "Scope of the management system",
+  "Système de management et processus": "Management system and its processes",
+  "Leadership et engagement : généralités": "Leadership and commitment: general",
+  "Orientation client": "Customer focus",
+  "Établissement de la politique": "Establishing the policy",
+  "Communication de la politique": "Communicating the policy",
+  "Rôles, responsabilités et autorités": "Roles, responsibilities and authorities",
+  "Actions face aux risques et opportunités": "Actions to address risks and opportunities",
+  "Objectifs et planification pour les atteindre": "Objectives and planning to achieve them",
+  "Planification des modifications": "Planning of changes",
+  "Ressources : généralités": "Resources: general",
+  "Ressources humaines": "People",
+  "Environnement de mise en œuvre des processus": "Environment for the operation of processes",
+  "Ressources pour la surveillance et la mesure": "Monitoring and measuring resources",
+  "Connaissances organisationnelles": "Organizational knowledge",
+  "Compétences": "Competence",
+  "Sensibilisation": "Awareness",
+  "Informations documentées : généralités": "Documented information: general",
+  "Création et mise à jour des informations documentées": "Creating and updating documented information",
+  "Maîtrise des informations documentées": "Control of documented information",
+  "Planification et maîtrise opérationnelles": "Operational planning and control",
+  "Communication avec les clients": "Customer communication",
+  "Détermination des exigences relatives aux produits": "Determining the requirements for products",
+  "Revue des exigences relatives aux produits": "Review of the requirements for products",
+  "Modifications des exigences": "Changes to requirements",
+  "Conception et développement : généralités": "Design and development: general",
+  "Planification de la conception": "Design and development planning",
+  "Éléments d'entrée de la conception": "Design and development inputs",
+  "Maîtrise de la conception": "Design and development controls",
+  "Éléments de sortie de la conception": "Design and development outputs",
+  "Modifications de la conception": "Design and development changes",
+  "Prestataires externes : généralités": "External providers: general",
+  "Type et étendue de la maîtrise des prestataires": "Type and extent of control of providers",
+  "Informations à l'attention des prestataires externes": "Information for external providers",
+  "Maîtrise de la production": "Control of production",
+  "Identification et traçabilité": "Identification and traceability",
+  "Propriété des clients ou des prestataires externes": "Property belonging to customers or external providers",
+  "Préservation": "Preservation",
+  "Activités après livraison": "Post-delivery activities",
+  "Maîtrise des modifications en production": "Control of changes in production",
+  "Libération des produits et services": "Release of products and services",
+  "Maîtrise des éléments de sortie non conformes": "Control of nonconforming outputs",
+  "Surveillance et mesure : généralités": "Monitoring and measurement: general",
+  "Satisfaction du client": "Customer satisfaction",
+  "Analyse et évaluation": "Analysis and evaluation",
+  "Revue de direction : généralités": "Management review: general",
+  "Éléments d'entrée de la revue de direction": "Management review inputs",
+  "Éléments de sortie de la revue de direction": "Management review outputs",
+  "Amélioration : généralités": "Improvement: general",
+  "Non-conformité et action corrective": "Nonconformity and corrective action",
+  "Amélioration continue": "Continual improvement",
+
+  /* processus par défaut */
+  "Pilotage et revue de direction": "Management and management review",
+  "Commercial et revue de contrat": "Sales and contract review",
+  "Conception et ingénierie": "Design and engineering",
+  "Achats et fournisseurs": "Purchasing and suppliers",
+  "Contrôle réception": "Receiving inspection",
+  "Production": "Production",
+  "Contrôle et essais": "Inspection and testing",
+  "Expédition et après-vente": "Shipping and after-sales",
+  "Maîtrise documentaire": "Document control",
+  "Ressources humaines et compétences": "Human resources and competence",
+  "Métrologie": "Metrology",
+  "Amélioration continue (FNC, CAPA)": "Continual improvement (NCR, CAPA)",
+  "Communication et culture de sûreté": "Communication and safety culture",
+
+  /* questions d'audit par défaut */
+  "Les enjeux internes et externes du site, y compris ceux liés à la sûreté nucléaire, sont-ils identifiés et revus à une fréquence définie ?": "Are the site's internal and external issues, including those related to nuclear safety, identified and reviewed at a defined frequency?",
+  "Comment la surveillance de ces enjeux alimente-t-elle la revue de direction ?": "How does monitoring of these issues feed into the management review?",
+  "Les parties intéressées pertinentes (clients exploitants, autorité de sûreté, fournisseurs, salariés) et leurs exigences sont-elles identifiées ?": "Are the relevant interested parties (operator customers, safety authority, suppliers, employees) and their requirements identified?",
+  "Comment les évolutions de ces exigences sont-elles suivies et prises en compte ?": "How are changes to these requirements followed up and taken into account?",
+  "Le domaine d'application du SMQ est-il documenté, avec la justification des exigences non applicables ?": "Is the scope of the QMS documented, with the justification for requirements that do not apply?",
+  "Les activités et produits destinés au nucléaire sont-ils clairement identifiés dans ce domaine ?": "Are the activities and products intended for nuclear use clearly identified within this scope?",
+  "La cartographie des processus est-elle à jour (pilotes, interactions, indicateurs, risques) ?": "Is the process map up to date (owners, interactions, indicators, risks)?",
+  "Comment l'approche graduée est-elle appliquée selon l'importance des produits pour la sûreté nucléaire ?": "How is the graded approach applied according to the importance of products for nuclear safety?",
+  "Les fiches processus sont-elles revues et leurs indicateurs suivis ?": "Are process sheets reviewed and their indicators monitored?",
+  "Comment la direction démontre-t-elle son engagement pour la qualité et la culture de sûreté nucléaire ?": "How does top management demonstrate its commitment to quality and to nuclear safety culture?",
+  "La priorité donnée à la sûreté est-elle visible dans les arbitrages entre délai, coût et qualité ?": "Is the priority given to safety visible in trade-offs between schedule, cost and quality?",
+  "Les exigences des clients et les exigences réglementaires sont-elles déterminées et respectées de façon constante ?": "Are customer and regulatory requirements determined and consistently met?",
+  "La satisfaction des clients fait-elle l'objet d'un suivi par la direction ?": "Is customer satisfaction monitored by top management?",
+  "La politique qualité est-elle adaptée au contexte du site et inclut-elle l'engagement envers la sûreté nucléaire ?": "Is the quality policy suited to the site's context, and does it include the commitment to nuclear safety?",
+  "La politique est-elle communiquée, comprise et accessible aux parties intéressées ?": "Is the policy communicated, understood and available to interested parties?",
+  "Les personnes rencontrées savent-elles dire ce que la politique implique pour leur poste ?": "Can the people met explain what the policy means for their job?",
+  "Les rôles, responsabilités et autorités sont-ils définis, communiqués et compris (organigrammes, fiches de fonction, délégations) ?": "Are roles, responsibilities and authorities defined, communicated and understood (organisation charts, job descriptions, delegations)?",
+  "Qui a l'autorité pour arrêter une activité en cas de doute sur la sûreté ou la qualité ?": "Who has the authority to stop an activity when there is doubt about safety or quality?",
+  "Les risques et opportunités du processus sont-ils identifiés, évalués et traités ?": "Are the process risks and opportunities identified, assessed and addressed?",
+  "L'efficacité des actions de maîtrise des risques est-elle évaluée ?": "Is the effectiveness of risk control actions evaluated?",
+  "Les objectifs qualité sont-ils mesurables, déclinés aux processus et suivis ?": "Are quality objectives measurable, cascaded to processes and monitored?",
+  "Les plans d'actions associés précisent-ils responsables, moyens et échéances ?": "Do the related action plans specify owners, resources and deadlines?",
+  "Les modifications du SMQ (organisation, processus, outils) sont-elles planifiées en évaluant leurs conséquences ?": "Are changes to the QMS (organisation, processes, tools) planned with an assessment of their consequences?",
+  "Les modifications d'organisation pouvant affecter la sûreté sont-elles analysées avant leur mise en œuvre ?": "Are organisational changes that may affect safety analysed before they are implemented?",
+  "Les ressources nécessaires au processus sont-elles déterminées et disponibles ?": "Are the resources needed for the process determined and available?",
+  "Les effectifs permettent-ils de réaliser les activités sans compromettre la qualité ?": "Is staffing sufficient to carry out the activities without compromising quality?",
+  "Les équipements et locaux sont-ils entretenus selon un plan de maintenance, avec enregistrements ?": "Are equipment and premises maintained according to a maintenance plan, with records?",
+  "L'environnement de travail (propreté, exclusion des corps étrangers, conditions ambiantes) est-il maîtrisé là où il influe sur la conformité ?": "Is the work environment (cleanliness, foreign material exclusion, ambient conditions) controlled where it affects conformity?",
+  "Les moyens de mesure sont-ils identifiés, étalonnés ou vérifiés, avec un statut de validité visible ?": "Are measuring instruments identified, calibrated or verified, with a visible validity status?",
+  "Quand un moyen est trouvé hors tolérance, l'impact sur les produits déjà contrôlés est-il analysé ?": "When an instrument is found out of tolerance, is the impact on products already inspected analysed?",
+  "La traçabilité des étalonnages aux étalons nationaux ou internationaux est-elle assurée ?": "Is calibration traceable to national or international standards?",
+  "Les connaissances nécessaires sont-elles identifiées, conservées et transmises (retour d'expérience, départs, savoir-faire) ?": "Is the necessary knowledge identified, retained and passed on (lessons learned, departures, know-how)?",
+  "Les compétences requises sont-elles définies par poste et évaluées ?": "Are the required competences defined for each job and assessed?",
+  "Les qualifications et habilitations particulières (contrôles non destructifs, soudage, sûreté nucléaire) sont-elles à jour ?": "Are specific qualifications and authorisations (non-destructive testing, welding, nuclear safety) up to date?",
+  "L'efficacité des formations est-elle évaluée ?": "Is the effectiveness of training evaluated?",
+  "Les personnes connaissent-elles la politique, leurs objectifs et l'impact de leur travail sur la sûreté nucléaire ?": "Do people know the policy, their objectives and how their work affects nuclear safety?",
+  "Les sensibilisations à la culture de sûreté, aux règles d'or et aux produits contrefaits, frauduleux ou suspects sont-elles réalisées et enregistrées ?": "Are awareness sessions on safety culture, golden rules and counterfeit, fraudulent or suspect items carried out and recorded?",
+  "Qu'est-ce qui est communiqué, à qui, quand et par quel canal ?": "What is communicated, to whom, when and through which channel?",
+  "Les personnes peuvent-elles signaler un problème de sûreté ou de qualité sans crainte de représailles ?": "Can people report a safety or quality problem without fear of reprisal?",
+  "Les informations documentées exigées par la norme et par les clients sont-elles identifiées ?": "Is the documented information required by the standard and by customers identified?",
+  "Les documents sont-ils identifiés (référence, indice), revus et approuvés avant diffusion ?": "Are documents identified (reference, revision), reviewed and approved before distribution?",
+  "Les documents cités en référence dans les procédures sont-ils en vigueur ?": "Are the documents referenced in procedures current?",
+  "Seules les versions en vigueur sont-elles disponibles aux postes ? Les documents périmés sont-ils retirés ou identifiés ?": "Are only current versions available at workstations? Are obsolete documents withdrawn or identified?",
+  "Les enregistrements sont-ils protégés, lisibles et conservés selon les durées requises, y compris les exigences des clients du nucléaire ?": "Are records protected, legible and retained for the required periods, including the requirements of nuclear customers?",
+  "Les documents d'origine externe (normes, spécifications client) sont-ils identifiés et maîtrisés ?": "Are documents of external origin (standards, customer specifications) identified and controlled?",
+  "Les activités sont-elles planifiées (plans qualité, programmes de contrôle) selon les exigences du produit ?": "Are activities planned (quality plans, inspection programmes) according to product requirements?",
+  "Les activités importantes pour la protection et leurs exigences associées sont-elles identifiées dans les dossiers concernés ?": "Are the activities important for protection and their associated requirements identified in the relevant files?",
+  "Quelles dispositions empêchent l'introduction de produits contrefaits, frauduleux ou suspects ?": "What arrangements prevent counterfeit, fraudulent or suspect items from being introduced?",
+  "Les canaux de communication avec le client sont-ils définis (interlocuteurs, réclamations, informations sur les produits) ?": "Are the communication channels with the customer defined (contacts, complaints, product information)?",
+  "Les exigences relatives au produit, y compris réglementaires et de sûreté, sont-elles déterminées et documentées ?": "Are product requirements, including regulatory and safety requirements, determined and documented?",
+  "La revue de contrat est-elle réalisée avant engagement et enregistrée ?": "Is the contract review carried out before commitment and recorded?",
+  "Les exigences particulières (spécifications client, codes de construction) sont-elles identifiées et transmises aux fonctions concernées ?": "Are specific requirements (customer specifications, construction codes) identified and passed on to the functions concerned?",
+  "Les modifications de commande sont-elles revues et répercutées dans les documents et auprès des personnes concernées ?": "Are order changes reviewed and reflected in documents and passed on to the people concerned?",
+  "Le processus de conception est-il établi et adapté à la nature des produits ?": "Is the design process established and suited to the nature of the products?",
+  "La conception est-elle planifiée (étapes, revues, vérifications, validations, responsabilités) ?": "Is design planned (stages, reviews, verifications, validations, responsibilities)?",
+  "Les éléments d'entrée (exigences fonctionnelles, de sûreté, réglementaires, retour d'expérience) sont-ils complets et sans ambiguïté ?": "Are the inputs (functional, safety and regulatory requirements, lessons learned) complete and unambiguous?",
+  "Les revues, vérifications et validations sont-elles réalisées et enregistrées, par des personnes indépendantes quand c'est requis ?": "Are reviews, verifications and validations carried out and recorded, by independent people when required?",
+  "Les éléments de sortie répondent-ils aux éléments d'entrée et précisent-ils les caractéristiques essentielles du produit ?": "Do the outputs meet the inputs and specify the essential characteristics of the product?",
+  "Les modifications de conception sont-elles identifiées, revues, autorisées et leur impact évalué ?": "Are design changes identified, reviewed and authorised, and is their impact assessed?",
+  "Les fournisseurs sont-ils évalués, sélectionnés et surveillés selon des critères adaptés à l'importance du produit pour la sûreté ?": "Are suppliers evaluated, selected and monitored using criteria suited to the importance of the product for safety?",
+  "La liste des fournisseurs approuvés est-elle à jour et utilisée par les acheteurs ?": "Is the approved supplier list up to date and used by buyers?",
+  "Le type et l'étendue de la surveillance (contrôle réception, inspections chez le fournisseur, points d'arrêt) sont-ils définis selon les risques ?": "Are the type and extent of surveillance (receiving inspection, inspections at the supplier, hold points) defined according to risk?",
+  "Les produits reçus sont-ils vérifiés avant utilisation, avec enregistrement du résultat ?": "Are received products checked before use, with the result recorded?",
+  "Les commandes transmettent-elles toutes les exigences applicables (techniques, qualité, sûreté, documentaires, accès aux locaux du fournisseur) ?": "Do purchase orders pass on all applicable requirements (technical, quality, safety, documentation, access to the supplier's premises)?",
+  "Les exigences sont-elles répercutées aux sous-traitants de rang 2 ?": "Are the requirements flowed down to tier-2 subcontractors?",
+  "La prévention des produits contrefaits, frauduleux ou suspects est-elle exigée dans les commandes ?": "Is the prevention of counterfeit, fraudulent or suspect items required in purchase orders?",
+  "Les opérations sont-elles réalisées selon des documents en vigueur (gammes, modes opératoires, plans) disponibles au poste ?": "Are operations carried out according to current documents (routings, work instructions, drawings) available at the workstation?",
+  "Les procédés spéciaux (soudage, traitement thermique, contrôles non destructifs) sont-ils qualifiés et réalisés par du personnel qualifié ?": "Are special processes (welding, heat treatment, non-destructive testing) qualified and performed by qualified personnel?",
+  "Les points d'arrêt et points de notification du client sont-ils respectés ?": "Are customer hold points and notification points respected?",
+  "Les produits sont-ils identifiés tout au long de la réalisation, avec leur état de contrôle ?": "Are products identified throughout production, with their inspection status?",
+  "La traçabilité exigée (matière, coulée, opérateur, procédé) est-elle assurée et vérifiable ?": "Is the required traceability (material, heat, operator, process) ensured and verifiable?",
+  "Les biens du client ou des fournisseurs (outillages, pièces, données) sont-ils identifiés et protégés, et toute perte ou détérioration est-elle signalée ?": "Is property belonging to the customer or to suppliers (tooling, parts, data) identified and protected, and is any loss or damage reported?",
+  "Les produits sont-ils préservés (manutention, propreté, protection, stockage, emballage) jusqu'à la livraison ?": "Are products preserved (handling, cleanliness, protection, storage, packaging) up to delivery?",
+  "Les exigences après livraison (garantie, assistance, retour d'expérience des exploitants) sont-elles prises en compte ?": "Are post-delivery requirements (warranty, support, operator feedback) taken into account?",
+  "Les modifications en production sont-elles revues, autorisées et enregistrées ?": "Are changes in production reviewed, authorised and recorded?",
+  "La libération des produits a-t-elle lieu après toutes les vérifications prévues, par une personne autorisée ?": "Are products released after all planned verifications, by an authorised person?",
+  "Le dossier de fin de fabrication est-il complet, vérifié et signé avant envoi ?": "Is the end-of-manufacturing file complete, checked and signed before dispatch?",
+  "Les produits non conformes sont-ils identifiés et isolés pour empêcher leur utilisation ?": "Are nonconforming products identified and segregated to prevent their use?",
+  "Les dérogations et décisions de traitement sont-elles autorisées au bon niveau, y compris par le client quand c'est requis ?": "Are concessions and disposition decisions authorised at the right level, including by the customer when required?",
+  "Les non-conformités sont-elles enregistrées dans le registre des FNC ?": "Are nonconformities recorded in the NCR register?",
+  "Les indicateurs de performance sont-ils définis, mesurés et analysés à une fréquence adaptée ?": "Are performance indicators defined, measured and analysed at a suitable frequency?",
+  "La perception du client est-elle surveillée (enquêtes, réclamations, évaluations par le client) ?": "Is the customer's perception monitored (surveys, complaints, customer evaluations)?",
+  "Les données sont-elles analysées pour évaluer la performance, l'efficacité du SMQ et les besoins d'amélioration ?": "Are data analysed to evaluate performance, the effectiveness of the QMS and improvement needs?",
+  "Le programme d'audit tient-il compte de l'importance des processus, des changements et des résultats des audits précédents ?": "Does the audit programme take into account the importance of processes, changes and the results of previous audits?",
+  "Les auditeurs sont-ils qualifiés et indépendants des activités auditées ?": "Are auditors qualified and independent of the activities audited?",
+  "Les constats des audits précédents ont-ils été traités et l'efficacité des actions vérifiée ?": "Have findings from previous audits been addressed and the effectiveness of actions checked?",
+  "La revue de direction est-elle réalisée à la fréquence prévue, avec les participants requis ?": "Is the management review held at the planned frequency, with the required participants?",
+  "Tous les éléments d'entrée requis sont-ils traités, y compris la culture de sûreté et la performance des fournisseurs ?": "Are all required inputs covered, including safety culture and supplier performance?",
+  "Les décisions et actions issues de la revue sont-elles enregistrées et suivies ?": "Are the decisions and actions arising from the review recorded and followed up?",
+  "Les opportunités d'amélioration sont-elles identifiées et mises en œuvre ?": "Are opportunities for improvement identified and implemented?",
+  "Les non-conformités font-elles l'objet d'une correction, d'une analyse des causes et d'actions correctives proportionnées ?": "Are nonconformities corrected, their causes analysed and proportionate corrective actions taken?",
+  "L'efficacité des actions correctives est-elle vérifiée avant clôture ?": "Is the effectiveness of corrective actions checked before closure?",
+  "Les actions sont-elles suivies dans les délais dans l'outil CAPA ?": "Are actions followed up on time in the CAPA tool?",
+  "Comment les résultats des analyses, des audits et des revues alimentent-ils l'amélioration continue ?": "How do the results of analyses, audits and reviews feed continual improvement?",
+
+  /* modèle et vérification */
+  "Enregistrement impossible dans ce navigateur. Exporte la base en JSON pour ne rien perdre.": "Cannot save in this browser. Export the database as JSON so nothing is lost.",
+  "Référentiel par défaut": "Default requirements",
+  "Ajout manuel": "Manual entry",
+  "Sans numéro": "No number",
+  "Évaluer la conformité du processus aux exigences de l'ISO 19443 et aux dispositions internes du SMQ, ainsi que son efficacité.": "Assess the conformity of the process with the requirements of ISO 19443 and the internal QMS arrangements, and its effectiveness.",
+  "Référence Fabasoft de l’audit incomplète": "Fabasoft audit reference incomplete",
+  "Titre de l’audit non renseigné": "Audit title not filled in",
+  "Date de l’audit non renseignée": "Audit date not filled in",
+  "Auditeur responsable non renseigné": "Lead auditor not filled in",
+  "Processus ou périmètre non renseigné": "Process or scope not filled in",
+  "Objectifs non renseignés": "Objectives not filled in",
+  "Aucune exigence dans la checklist": "No requirement in the checklist",
+  "Plan d'audit non établi": "Audit plan not drawn up",
+  "La date de fin précède la date de début": "The end date is before the start date",
+  "Aucune personne rencontrée renseignée": "No interviewee filled in",
+  "Synthèse du rapport non rédigée": "Report summary not written",
+  "Date d'émission du rapport non renseignée": "Report issue date not filled in",
+  "constat trop court pour être compris sans l'auditeur": "finding too short to be understood without the auditor",
+  "Constat trop court pour être compris sans l'auditeur": "Finding too short to be understood without the auditor",
+  "le constat propose une solution : décrire l'écart et laisser le processus définir ses actions": "the finding proposes a solution: describe the gap and let the process define its actions",
+  "Le constat propose une solution : décrire l'écart et laisser le processus définir ses actions": "The finding proposes a solution: describe the gap and let the process define its actions",
+  "aucune référence ni quantité citée (document, indice, nombre de cas)": "no reference or quantity cited (document, revision, number of cases)",
+  "Aucune référence ni quantité citée (document, indice, nombre de cas)": "No reference or quantity cited (document, revision, number of cases)",
+  "formulation factuelle": "factual wording",
+  "Formulation factuelle": "Factual wording",
+  "Annuler": "Cancel",
+  "Données stockées dans ce navigateur": "Data stored in this browser",
+  "Exporter régulièrement la base en JSON pour la sauvegarder.": "Export the database to JSON regularly to back it up.",
+  "Audit :": "Audit:",
+
+  /* onglets de l'audit */
+  "Dossier": "File",
+  "Préparation": "Preparation",
+  "Plan d'audit": "Audit plan",
+  "Terrain": "On site",
+  "Constats": "Findings",
+  "Rapport": "Report",
+  "Vérification": "Check",
+  "Aucun audit ouvert.": "No audit open.",
+  "Revenir à la liste des audits": "Back to the audit list",
+  "Étape": "Stage",
+  "Exporter": "Export",
+
+  /* dossier */
+  "Référence Fabasoft de l’audit": "Fabasoft audit reference",
+  "Type d'audit": "Audit type",
+  "Lieu": "Location",
+  "Titre": "Title",
+  "Date de l’audit (début)": "Audit date (start)",
+  "Date de fin": "End date",
+  "Processus audités": "Audited processes",
+  "Périmètre (activités, ateliers, projets, produits)": "Scope (activities, workshops, projects, products)",
+  "Référentiels": "Standards",
+  "Objectifs": "Objectives",
+  "Auditeur responsable": "Lead auditor",
+  "Co-auditeurs": "Co-auditors",
+  "Diffusion du rapport": "Report distribution",
+  "Rapport vérifié par": "Report checked by",
+  "Rapport approuvé par": "Report approved by",
+  "Personnes rencontrées": "People met",
+  "Nom": "Name",
+  "Fonction": "Position",
+  "Ouverture": "Opening",
+  "Clôture": "Closing",
+  "Présent à l'ouverture": "Present at the opening",
+  "Présent à la clôture": "Present at the closing",
+  "Retirer": "Remove",
+  "Aucune personne renseignée.": "No one filled in.",
+  "Ajouter une personne": "Add a person",
+  "Les cases Ouverture et Clôture alimentent la liste de présence du rapport.": "The Opening and Closing boxes feed the attendance list in the report.",
+  "Supprimer cet audit": "Delete this audit",
+  "Supprime le dossier, la checklist et les constats de cet appareil. Exporter l'audit en JSON ou en Word avant, si les données doivent être conservées.": "Deletes the file, the checklist and the findings from this device. Export the audit to JSON or Word first if the data must be kept.",
+  "Supprimer l'audit": "Delete the audit",
+
+  /* préparation */
+  "Éléments d'entrée": "Inputs",
+  "Ce qu'il faut avoir en tête avant l'audit : constats des audits précédents, FNC et réclamations du processus, indicateurs, changements récents. Repris dans le plan d'audit.": "What to keep in mind before the audit: findings from previous audits, NCRs and complaints for the process, indicators, recent changes. Included in the audit plan.",
+  "Ex. NCm de l'audit précédent sur la maîtrise documentaire ; 3 FNC réception depuis janvier ; nouveau fournisseur de fonderie": "E.g. mNC from the previous audit on document control; 3 receiving NCRs since January; new foundry supplier",
+  "Exigences à auditer": "Requirements to audit",
+  "Coche les exigences à auditer, ou ajoute d'un coup celles des processus cochés dans le dossier.": "Tick the requirements to audit, or add at once those of the processes ticked in the file.",
+  "Rechercher une exigence, un document, un processus": "Search for a requirement, a document, a process",
+  "Processus audité": "Audited process",
+  "Aucune exigence ne correspond à la recherche.": "No requirement matches the search.",
+  "Ajouter les exigences des processus du dossier": "Add the requirements of the file's processes",
+  "Établir le plan d'audit": "Draw up the audit plan",
+  "Imprimer la checklist": "Print the checklist",
+  "Vider la checklist": "Clear the checklist",
+  "Documents à consulter": "Documents to review",
+  "Documents internes rattachés aux exigences retenues, à relire avant l'audit et à demander à l'audité.": "Internal documents linked to the selected requirements, to read before the audit and to request from the auditee.",
+  "Aucun document rattaché aux exigences retenues. Importer la synthèse ISO 19443 dans le référentiel pour les faire apparaître ici.": "No document linked to the selected requirements. Import the ISO 19443 summary into the requirements to show them here.",
+  "Point hors référentiel": "Point outside the requirements",
+  "Exigence client, point de procédure interne ou thème libre.": "Customer requirement, internal procedure point or free topic.",
+  "Repère": "Reference",
+  "Ex. 8.4.3 ou EDF": "E.g. 8.4.3 or EDF",
+  "Intitulé": "Title",
+  "Ex. Exigences de surveillance du client dans les commandes": "E.g. Customer surveillance requirements in purchase orders",
+  "Ajouter à la checklist": "Add to the checklist",
+  "Points libres de cet audit": "Free points of this audit",
+  "Libre": "Free",
+
+  /* plan d'audit */
+  "Pause déjeuner": "Lunch break",
+  "Réunion d'ouverture : objectifs, périmètre, déroulement": "Opening meeting: objectives, scope, agenda",
+  "Synthèse des auditeurs": "Auditors' wrap-up",
+  "Réunion de clôture : présentation des constats": "Closing meeting: presentation of findings",
+  "Déroulé prévu de l'audit, à transmettre à l'audité avant la visite. La proposition automatique part de la checklist et des personnes rencontrées ; tout reste modifiable.": "Planned agenda of the audit, to send to the auditee before the visit. The automatic proposal starts from the checklist and the people met; everything remains editable.",
+  "Proposer à nouveau à partir de la checklist": "Propose again from the checklist",
+  "Proposer un plan à partir de la checklist": "Propose a plan from the checklist",
+  "Ajouter une séquence": "Add a session",
+  "Plan d'audit Word (.docx)": "Audit plan, Word (.docx)",
+  "Aucune séquence. Utiliser la proposition automatique ou ajouter une séquence.": "No session. Use the automatic proposal or add a session.",
+  "Aucune séquence. Préparer d'abord la checklist dans l'onglet Préparation, puis proposer un plan.": "No session. First prepare the checklist in the Preparation tab, then propose a plan.",
+  "Jour": "Day",
+  "Début": "Start",
+  "Fin": "End",
+  "Séquence": "Session",
+  "Exigences": "Requirements",
+  "Interlocuteurs": "Contacts",
+  "Thème, activité ou processus": "Topic, activity or process",
+  "Ex. §8.4.2": "E.g. §8.4.2",
+  "Fonctions ou noms": "Positions or names",
+  "Atelier, bureau": "Workshop, office",
+  "Monter": "Move up",
+  "Le plan Word reprend aussi les objectifs, le périmètre, les éléments d'entrée.": "The Word plan also includes the objectives, the scope and the inputs.",
+  "Retirer des exigences évaluées": "Remove assessed requirements",
+
+  /* terrain */
+  "La checklist est vide.": "The checklist is empty.",
+  "Préparer l'audit": "Prepare the audit",
+  "Suivante à évaluer": "Next to assess",
+  "Rechercher": "Search",
+  "Toutes les exigences": "All requirements",
+  "Non évaluées": "Not assessed",
+  "Écarts (OBS, NC)": "Gaps (OBS, NC)",
+  "Points forts et pistes de progrès": "Strengths and opportunities for improvement",
+  "Aucune exigence ne correspond au filtre.": "No requirement matches the filter.",
+  "évaluées": "assessed",
+  "Preuves examinées (documents, indices, échantillon), personnes rencontrées, constatations": "Evidence examined (documents, revisions, sample), people met, observations",
+  "Rédiger un constat": "Write a finding",
+  "Ajouter une question puis Entrée": "Add a question, then Enter",
+
+  /* constats */
+  "Nouveau constat": "New finding",
+  "Copier tous les constats": "Copy all findings",
+  "Retour à la liste des constats": "Back to the list of findings",
+  "Aucun constat. Les constats se rédigent depuis l'onglet Terrain (bouton Rédiger un constat) ou avec Nouveau constat.": "No finding. Findings are written from the On site tab (Write a finding button) or with New finding.",
+  "À saisir dans Fabasoft": "To enter in Fabasoft",
+  "Constat à rédiger": "Finding to write",
+  "Aucun constat.": "No finding.",
+  "Voir dans la checklist": "See in the checklist",
+  "Supprimer": "Delete",
+  "Exigence du référentiel": "Requirement",
+  "Processus": "Process",
+  "Non renseigné": "Not specified",
+  "Exigence de référence (norme, procédure interne, exigence client)": "Reference requirement (standard, internal procedure, customer requirement)",
+  "Ex. ISO 19443 §7.5.3 ; procédure AQ… indice …": "E.g. ISO 19443 §7.5.3; procedure AQ… revision …",
+  "Reprendre l'exigence et les documents du référentiel": "Use the requirement and documents from the requirements list",
+  "Constat (écart factuel)": "Finding (factual gap)",
+  "Ce qui a été observé, quantifié sur l’échantillon examiné": "What was observed, quantified on the sample examined",
+  "Preuves objectives": "Objective evidence",
+  "Documents, indices, numéros d’OF, enregistrements, personnes interrogées": "Documents, revisions, work order numbers, records, people interviewed",
+  "Référence du constat dans Fabasoft": "Finding reference in Fabasoft",
+  "À renseigner après saisie dans Fabasoft": "To fill in after entry in Fabasoft",
+  "Copier le constat pour Fabasoft": "Copy the finding for Fabasoft",
+  "Exigence de référence renseignée": "Reference requirement filled in",
+  "Exigence de référence à renseigner": "Reference requirement to fill in",
+  "Écart décrit": "Gap described",
+  "Écart constaté à décrire": "Observed gap to describe",
+  "Preuves renseignées": "Evidence filled in",
+  "Preuves objectives à renseigner": "Objective evidence to fill in",
+  "Aide à la rédaction": "Writing aid",
+  "Un constat de non-conformité relie une exigence, un écart factuel et des preuves.": "A nonconformity finding links a requirement, a factual gap and evidence.",
+  "Un constat décrit des faits vérifiables.": "A finding describes verifiable facts.",
+
+  /* rapport et vérification */
+  "Indice du rapport": "Report revision",
+  "Date d'émission": "Issue date",
+  "Appréciation globale": "Overall assessment",
+  "Non renseignée": "Not specified",
+  "Synthèse du rapport": "Report summary",
+  "Principaux enseignements, points forts, écarts, efficacité du processus": "Main lessons, strengths, gaps, process effectiveness",
+  "Proposer une synthèse à partir des données": "Propose a summary from the data",
+  "Le texte proposé reste modifiable.": "The proposed text remains editable.",
+  "Livrables": "Deliverables",
+  "Rapport Word (.docx)": "Word report (.docx)",
+  "Rapport PDF": "PDF report",
+  "Transférer l'audit (JSON)": "Transfer the audit (JSON)",
+  "Contenu du rapport": "Report content",
+  "Liste des documents internes de référence": "List of internal reference documents",
+  "Détail de la checklist (évaluation et preuves)": "Checklist detail (assessment and evidence)",
+  "Questions posées dans le détail de la checklist": "Questions asked, in the checklist detail",
+  "La mention de fin de rapport se règle dans Paramètres.": "The closing statement of the report is set in Settings.",
+  "Bilan": "Overview",
+  "Exigences évaluées": "Requirements assessed",
+  "Aperçu du rapport": "Report preview",
+  "Points à traiter avant d'émettre le rapport, recalculés à chaque modification. Un clic sur un point ouvre l'endroit à corriger.": "Points to address before issuing the report, recalculated at every change. Click a point to open the place to correct.",
+  "Terrain : exigences évaluées": "On site: requirements assessed",
+  "Rédaction des constats": "Writing of findings",
+  "Points à traiter": "Points to address",
+  "Aucun point à traiter.": "Nothing to address.",
+
+  /* mes audits */
+  "Bienvenue": "Welcome",
+  "Cet outil aide l'auditeur à préparer l'audit et à constituer le rapport, sur ordinateur comme sur téléphone. Le suivi des constats et des actions reste dans Fabasoft. Les données restent sur cet appareil : exporter chaque audit en JSON pour le transmettre ou le sauvegarder.": "This tool helps the auditor prepare the audit and build the report, on a computer or a phone. Findings and actions are tracked in Fabasoft. Data stays on this device: export each audit to JSON to pass it on or back it up.",
+  "Nom de l'auditeur (prérempli dans les nouveaux audits)": "Auditor's name (prefilled in new audits)",
+  "Prénom Nom": "First name Last name",
+  "Créer un audit": "Create an audit",
+  "Importer un audit reçu (JSON)": "Import an audit received (JSON)",
+  "Un audit se prépare, se conduit sur le terrain puis donne un rapport. Un clic sur une ligne ouvre l'audit.": "An audit is prepared, carried out on site, then produces a report. Click a row to open the audit.",
+  "Rechercher (référence, titre, processus, auditeur)": "Search (reference, title, process, auditor)",
+  "Exporter la sélection (JSON)": "Export the selection (JSON)",
+  "Supprimer la sélection": "Delete the selection",
+  "Désélectionner": "Deselect",
+  "Tout sélectionner": "Select all",
+  "Référence": "Reference",
+  "Dates": "Dates",
+  "Auditeur": "Auditor",
+  "Sélectionner": "Select",
+  "Aucun": "None",
+  "Nouvel audit sur le même périmètre, avec la même checklist": "New audit on the same scope, with the same checklist",
+  "Dupliquer": "Duplicate",
+  "Aucun audit ne correspond aux filtres.": "No audit matches the filters.",
+
+  /* référentiel */
+  "Exigences auditables, documents internes associés, processus concernés et questions d'audit. Par défaut : la structure commune à l'ISO 9001 et à l'ISO 19443. Importer la synthèse ISO 19443 du site (Excel ou CSV) pour y rattacher les documents du SMQ et le texte des exigences.": "Auditable requirements, related internal documents, processes concerned and audit questions. By default: the structure shared by ISO 9001 and ISO 19443. Import the site's ISO 19443 summary (Excel or CSV) to link the QMS documents and the requirement text.",
+  "Tous les chapitres": "All clauses",
+  "Tous les processus": "All processes",
+  "Spécifiques ISO 19443": "ISO 19443 specific",
+  "Importer un fichier Excel ou CSV": "Import an Excel or CSV file",
+  "Coller depuis Excel": "Paste from Excel",
+  "Ajouter": "Add",
+  "Réinitialiser": "Reset",
+  "Exigence": "Requirement",
+  "Texte de l'exigence": "Requirement text",
+  "Documents internes": "Internal documents",
+  "Questions d'audit": "Audit questions",
+  "Non importé": "Not imported",
+  "Aucune exigence.": "No requirement.",
+  "Numéro d'exigence": "Requirement number",
+  "Ex. 8.4.3": "E.g. 8.4.3",
+  "Texte ou résumé de l'exigence": "Requirement text or summary",
+  "Documents internes (séparés par des points-virgules)": "Internal documents (separated by semicolons)",
+  "Processus (séparés par des points-virgules)": "Processes (separated by semicolons)",
+  "Exigence spécifique ISO 19443 (pèse dans le score de priorité)": "ISO 19443 specific requirement (weighs in the priority score)",
+  "Questions d'audit (une par ligne)": "Audit questions (one per line)",
+  "Les modifications s'appliquent aux prochaines checklists ; les audits déjà préparés gardent leurs questions.": "Changes apply to future checklists; audits already prepared keep their questions.",
+  "Le numéro d'exigence est obligatoire.": "The requirement number is required.",
+  "Exigence ajoutée.": "Requirement added.",
+  "Exigence modifiée.": "Requirement updated.",
+  "Enregistrer": "Save",
+  "Supprimer l'exigence": "Delete the requirement",
+  "Nouvelle exigence": "New requirement",
+  "Spécifique ISO 19443 (oui/non)": "ISO 19443 specific (yes/no)",
+  "Aucune donnée trouvée dans ce fichier.": "No data found in this file.",
+  "Ne pas importer": "Do not import",
+  "Feuille": "Sheet",
+  "Ligne d'en-tête": "Header row",
+  "Correspondance des colonnes": "Column mapping",
+  "Numéro d'exigence (obligatoire)": "Requirement number (required)",
+  "Recopier vers le bas les numéros d'exigence manquants (cellules fusionnées dans Excel)": "Fill missing requirement numbers down (merged cells in Excel)",
+  "Compléter le référentiel actuel : les exigences de même numéro sont mises à jour, les autres sont ajoutées": "Add to the current requirements: requirements with the same number are updated, the others are added",
+  "Remplacer le référentiel par le contenu du fichier": "Replace the requirements with the file content",
+  "Reprendre les questions d'audit par défaut pour les exigences reconnues": "Use the default audit questions for recognised requirements",
+  "Importer le référentiel": "Import requirements",
+  "Importer": "Import",
+  "Choisis la colonne du numéro d'exigence.": "Choose the requirement number column.",
+  "Aucune ligne exploitable : vérifie la ligne d'en-tête et la colonne du numéro d'exigence.": "No usable row: check the header row and the requirement number column.",
+  "Dans Excel, sélectionne le tableau de la synthèse avec sa ligne d'en-tête, copie-le (Ctrl+C), puis colle-le ici (Ctrl+V).": "In Excel, select the summary table with its header row, copy it (Ctrl+C), then paste it here (Ctrl+V).",
+  "Coller ici": "Paste here",
+  "Continuer": "Continue",
+  "Rien à importer.": "Nothing to import.",
+  "Collage": "Paste",
+  "collage Excel": "Excel paste",
+
+  /* paramètres */
+  "Réglages communs à tous les audits de cette base. Ils sont enregistrés avec la base et voyagent avec l'export JSON.": "Settings shared by all audits in this database. They are saved with the database and travel with the JSON export.",
+  "Organisation": "Organisation",
+  "Organisme": "Organisation",
+  "Auditeur par défaut": "Default auditor",
+  "Préfixe des numéros d’audit": "Audit number prefix",
+  "Référentiels par défaut des nouveaux audits": "Default standards for new audits",
+  "Durée d’audit estimée par exigence (minutes)": "Estimated audit time per requirement (minutes)",
+  "Heure de début proposée dans le plan d’audit": "Start time proposed in the audit plan",
+  "Libellés des évaluations": "Assessment labels",
+  "Les codes restent fixes (ils servent aux couleurs, au tri et aux exports) ; seuls les libellés changent.": "Codes stay fixed (they drive colours, sorting and exports); only the labels change.",
+  "Processus du site": "Site processes",
+  "Un processus par ligne. Ils servent au dossier d'audit, au plan d'audit et au rattachement des exigences.": "One process per line. They are used in the audit file, the audit plan and the linking of requirements.",
+  "Mention de fin de rapport": "Report closing statement",
+  "Affichage": "Display",
+  "Thème": "Theme",
+  "Automatique (selon le système)": "Automatic (follows the system)",
+  "Clair": "Light",
+  "Sombre": "Dark",
+  "Données": "Data",
+  "Les données restent dans ce navigateur, sur ce poste. Pour sauvegarder ou partager, exporter la base en JSON et la déposer sur OneDrive ou SharePoint ; un collègue l'importe ensuite avec Importer (JSON).": "Data stays in this browser, on this computer. To back up or share, export the database to JSON and store it on OneDrive or SharePoint; a colleague then imports it with Import (JSON).",
+  "Effacer toute la base": "Erase the whole database",
+
+  /* exports */
+  "Rapport modifiable : page de garde, visas, synthèse, constats": "Editable report: cover page, sign-offs, summary, findings",
+  "Ouvre l'impression : choisir Save as PDF": "Opens printing: choose Save as PDF",
+  "Déroulé, interlocuteurs et documents, à envoyer à l'audité": "Agenda, contacts and documents, to send to the auditee",
+  "Checklist terrain à imprimer": "On-site checklist to print",
+  "Questions, cases d'évaluation et zones de notes": "Questions, assessment boxes and note areas",
+  "Fichier à importer sur un autre appareil ou chez un collègue": "File to import on another device or by a colleague",
+  "Enregistrement de fichiers indisponible dans cet affichage. Ouvrir l'outil depuis le fichier HTML.": "File saving unavailable in this view. Open the tool from the HTML file.",
+  "Référence Fabasoft": "Fabasoft reference",
+  "Périmètre": "Scope",
+  "Diffusion": "Distribution",
+  "Objectifs, périmètre et référentiels": "Objectives, scope and standards",
+  "Objectifs non renseignés.": "Objectives not filled in.",
+  "Périmètre :": "Scope:",
+  "Référentiels :": "Standards:",
+  "Dates :": "Dates:",
+  "Appréciation globale :": "Overall assessment:",
+  "Documents internes de référence": "Internal reference documents",
+  "Document": "Document",
+  "Exigences concernées": "Requirements concerned",
+  "Déroulement de l'audit": "Conduct of the audit",
+  "Présent": "Present",
+  "Synthèse": "Summary",
+  "Synthèse non rédigée.": "Summary not written.",
+  "Indicateur": "Indicator",
+  "Nombre": "Count",
+  "Points forts": "Strengths",
+  "Réf.": "Ref.",
+  "Constat et preuves": "Finding and evidence",
+  "Aucun écart relevé.": "No gap found.",
+  "Détail de la checklist": "Checklist detail",
+  "Intitulé et documents": "Title and documents",
+  "Évaluation": "Assessment",
+  "Preuves et constatations": "Evidence and observations",
+  "Déroulement prévu": "Planned agenda",
+  "Horaire": "Time",
+  "Déroulé à préciser.": "Agenda to be specified.",
+  "Personnes à rencontrer": "People to meet",
+  "Documents à tenir à disposition": "Documents to have available",
+  "Points d'attention": "Points of attention",
+  "Merci de confirmer la disponibilité des interlocuteurs avant l'audit et de signaler toute contrainte d'accès aux ateliers.": "Please confirm the availability of the contacts before the audit and report any constraint on access to the workshops.",
+  "Visas": "Sign-offs",
+  "Visa": "Signature",
+  "Rédigé par": "Written by",
+  "Vérifié par": "Checked by",
+  "Approuvé par": "Approved by",
+  "Rapport d'audit interne": "Internal audit report",
+  "Plan d'audit interne": "Internal audit plan",
+  "sur": "of",
+  "Le plan ne contient aucune séquence : le document reprend le dossier et les documents à préparer.": "The plan has no session: the document covers the file and the documents to prepare.",
+  "Spécifique 19443": "19443 specific",
+  "Source": "Source",
+  "Oui": "Yes",
+  "Non": "No",
+  "Impression impossible dans cet affichage : ouvrir le fichier enregistré dans le navigateur, puis l'imprimer en PDF.": "Printing is not possible in this view: open the saved file in the browser, then print it to PDF.",
+  "Dans la page qui s'ouvre, choisir Imprimer puis Enregistrer en PDF.": "In the page that opens, choose Print, then Save as PDF.",
+  "Dans la fenêtre d'impression, choisir « Enregistrer au format PDF » ou « Microsoft Print to PDF », orientation Portrait.": "In the print window, choose “Save as PDF” or “Microsoft Print to PDF”, portrait orientation.",
+  "Checklist vide : préparer l’audit avant impression.": "Empty checklist: prepare the audit before printing.",
+  "Constat copié : coller dans Fabasoft.": "Finding copied: paste it into Fabasoft.",
+  "Constats copiés : coller dans Fabasoft.": "Findings copied: paste them into Fabasoft.",
+  "Copier le texte": "Copy the text",
+  "La copie automatique est bloquée ici : sélectionner le texte puis le copier.": "Automatic copy is blocked here: select the text, then copy it.",
+
+  /* import JSON et fichiers */
+  "Fichier JSON illisible.": "Unreadable JSON file.",
+  "Audit importé.": "Audit imported.",
+  "Audit déjà présent": "Audit already present",
+  "Ajouter comme copie": "Add as a copy",
+  "Remplacer": "Replace",
+  "Importer une base": "Import a database",
+  "Fusionner": "Merge",
+  ": ajoute les audits absents et remplace ceux du fichier plus récents ; le référentiel et les paramètres actuels sont conservés.": ": adds the missing audits and replaces those that are newer in the file; the current requirements and settings are kept.",
+  ": la base actuelle est remplacée par le fichier.": ": the current database is replaced by the file.",
+  "Base remplacée.": "Database replaced.",
+  "Ce fichier n'est pas une base ni un audit de cet outil.": "This file is neither a database nor an audit from this tool.",
+  "ce fichier n'est pas un classeur Excel (.xlsx)": "this file is not an Excel workbook (.xlsx)",
+  "compression non prise en charge": "unsupported compression",
+  "navigateur trop ancien pour lire un fichier Excel ; utiliser « Coller depuis Excel »": "browser too old to read an Excel file; use “Paste from Excel”",
+  "classeur Excel introuvable dans le fichier": "Excel workbook not found in the file",
+  "Ancien format .xls : enregistrer le fichier en .xlsx dans Excel, ou utiliser « Coller depuis Excel ».": "Old .xls format: save the file as .xlsx in Excel, or use “Paste from Excel”.",
+
+  /* suppression et actions */
+  "Supprimer définitivement": "Permanently delete",
+  "Cet audit n'a pas été exporté depuis sa dernière modification. Exporter en JSON avant de supprimer si les données doivent être conservées.": "This audit has not been exported since it was last changed. Export it to JSON before deleting if the data must be kept.",
+  "Exporter en JSON": "Export to JSON",
+  "Audit supprimé.": "Audit deleted.",
+  "Suppression annulée.": "Deletion undone.",
+  "Supprimer des audits": "Delete audits",
+  "Audit dupliqué : même périmètre et même checklist, sans évaluations ni constats. Compléter la référence Fabasoft et les dates.": "Audit duplicated: same scope and checklist, without assessments or findings. Fill in the Fabasoft reference and the dates.",
+  "Toutes les exigences sont évaluées.": "All requirements are assessed.",
+  "Ces exigences sont déjà dans la checklist.": "These requirements are already in the checklist.",
+  "Renseigner au moins un repère ou un intitulé.": "Fill in at least a reference or a title.",
+  "Supprimer le constat": "Delete the finding",
+  "Choisir d'abord l'exigence du référentiel.": "First choose the requirement.",
+  "Remplacer la synthèse": "Replace the summary",
+  "La synthèse actuelle sera remplacée par le texte proposé.": "The current summary will be replaced by the proposed text.",
+  "Préparer d'abord la checklist dans l'onglet Préparation.": "First prepare the checklist in the Preparation tab.",
+  "Remplacer le plan": "Replace the plan",
+  "Le plan actuel sera remplacé par une nouvelle proposition établie à partir de la checklist.": "The current plan will be replaced by a new proposal based on the checklist.",
+  "Réinitialiser le référentiel": "Reset the requirements",
+  "Le référentiel revient à la structure par défaut (ISO 9001 et ISO 19443) avec les questions d'origine. Les imports et modifications sont perdus ; les audits gardent leurs checklists.": "The requirements go back to the default structure (ISO 9001 and ISO 19443) with the original questions. Imports and changes are lost; audits keep their checklists.",
+  "Tous les audits, le référentiel et les paramètres de ce navigateur seront effacés. Exporter la base en JSON avant si besoin.": "All audits, the requirements and the settings in this browser will be erased. Export the database to JSON first if needed.",
+  "Tout effacer": "Erase everything",
+  "Les exemples sont déjà présents.": "The samples are already there.",
+
+  /* audits d'exemple */
+  "Achats et surveillance des fournisseurs": "Purchasing and supplier surveillance",
+  "Commandes de pièces de fonderie et de visserie pour les pompes destinées au nucléaire": "Orders for castings and fasteners for pumps intended for nuclear use",
+  "Auditeur exemple": "Sample auditor",
+  "Co-auditeur exemple": "Sample co-auditor",
+  "Responsable achats": "Purchasing manager",
+  "Pilote du processus Achats": "Purchasing process owner",
+  "Acheteur projets": "Project buyer",
+  "Acheteur": "Buyer",
+  "Ingénieur qualité fournisseurs": "Supplier quality engineer",
+  "Qualité fournisseurs": "Supplier quality",
+  "Le processus est maîtrisé dans son ensemble. L'évaluation des fournisseurs est structurée et à jour. La transmission des exigences nucléaires dans les commandes reste incomplète sur une partie de l'échantillon.":
+    "The process is under control overall. Supplier evaluation is structured and up to date.\n\nThe flow-down of nuclear requirements in purchase orders is still incomplete for part of the sample.",
+  "Liste des fournisseurs approuvés à jour, revue trimestrielle tracée. 15 fournisseurs évalués en 2024 sur 15 prévus.": "Approved supplier list up to date, quarterly review recorded. 15 suppliers evaluated in 2024 out of 15 planned.",
+  "6 réceptions examinées : plan de surveillance défini pour la fonderie, absent pour la visserie de classe 2.": "6 receipts examined: surveillance plan defined for castings, missing for class 2 fasteners.",
+  "10 commandes examinées : 2 commandes sans clause de répercussion des exigences de sûreté.": "10 purchase orders examined: 2 orders without a clause flowing down safety requirements.",
+  "Au bureau des achats, les conditions générales d’achat imprimées sont à l’indice C alors que l’indice D est en vigueur.": "In the purchasing office, the printed general terms of purchase are at revision C whereas revision D is in force.",
+  "Évaluation des fournisseurs structurée : 15 fournisseurs évalués sur 15 prévus en 2024, revue trimestrielle tracée en réunion achats-qualité.": "Structured supplier evaluation: 15 suppliers evaluated out of 15 planned in 2024, quarterly review recorded in the purchasing-quality meeting.",
+  "Comptes rendus de revue de janvier, avril et juillet 2025": "Review minutes from January, April and July 2025",
+  "Le plan de surveillance n'est pas défini pour la visserie de classe 2 (1 famille d'achat sur 4 examinées).": "The surveillance plan is not defined for class 2 fasteners (1 purchasing category out of 4 examined).",
+  "Plans de surveillance des familles fonderie, usinage, garnitures ; aucun pour la visserie": "Surveillance plans for castings, machining, seals; none for fasteners",
+  "2 commandes sur 10 examinées ne comportent pas la clause de répercussion des exigences de sûreté aux sous-traitants de rang 2.": "2 purchase orders out of 10 examined do not include the clause flowing down safety requirements to tier-2 subcontractors.",
+  "Commandes 4500123456 et 4500123511 (fonderie)": "Purchase orders 4500123456 and 4500123511 (castings)",
+  "Document périmé au poste : conditions générales d’achat affichées à l’indice C au bureau des achats, indice D en vigueur depuis mars 2025.": "Obsolete document at the workstation: general terms of purchase displayed at revision C in the purchasing office, revision D in force since March 2025.",
+  "Constat visuel au bureau des achats, liste des documents en vigueur": "Visual check in the purchasing office, list of current documents",
+  "Réception des pièces brutes et usinées, magasin et zone de quarantaine": "Receipt of raw and machined parts, store and quarantine area",
+  "Responsable réception": "Receiving manager",
+  "Pilote du processus Contrôle réception": "Receiving inspection process owner",
+  "Contrôleur réception": "Receiving inspector",
+  "Contrôleur": "Inspector",
+  "Magasinier": "Storekeeper",
+  "Magasin": "Store",
+  "8 dossiers de réception examinés, tous complets et signés.": "8 receiving files examined, all complete and signed.",
+  "Étiquetage des pièces avec numéro de coulée et état de contrôle, vérifié sur 12 pièces en magasin.": "Parts labelled with heat number and inspection status, checked on 12 parts in the store.",
+  "Libération par le contrôleur habilité vérifiée sur 8 dossiers.": "Release by the authorised inspector checked on 8 files.",
+  "Zone de quarantaine identifiée, 3 pièces bloquées avec FNC associée.": "Quarantine area identified, 3 parts on hold with the related NCR.",
+  "2 pieds à coulisse sur 9 sans étiquette de validité d’étalonnage au poste de contrôle.": "2 calipers out of 9 without a calibration validity label at the inspection station.",
+  "L'instruction de réception citée au poste renvoie à une procédure annulée.": "The receiving instruction at the workstation refers to a cancelled procedure.",
+  "L'instruction de réception affichée au poste (indice B) cite en référence une procédure annulée depuis 2025 ; 1 document sur 6 vérifiés au poste.": "The receiving instruction displayed at the workstation (revision B) references a procedure cancelled since 2025; 1 document out of 6 checked at the workstation.",
+  "Instruction de réception au poste, liste des documents en vigueur extraite de SAP DMS le 10/03/2026": "Receiving instruction at the workstation, list of current documents extracted from SAP DMS on 10/03/2026",
+  "2 pieds à coulisse sur 9 au poste de contrôle réception ne portent pas d'étiquette de validité d'étalonnage.": "2 calipers out of 9 at the receiving inspection station have no calibration validity label.",
+  "Moyens n° PC-114 et PC-121, base métrologie consultée : étalonnages valides": "Instruments PC-114 and PC-121, metrology database checked: calibrations valid",
+  "Identification des pièces exemplaire : numéro de coulée et état de contrôle visibles sur les 12 pièces vérifiées en magasin.": "Exemplary part identification: heat number and inspection status visible on the 12 parts checked in the store.",
+  "Pièces vérifiées en magasin, allées B et C": "Parts checked in the store, aisles B and C",
+  "Création, revue, diffusion et retrait des documents du SMQ dans SAP DMS": "Creation, review, distribution and withdrawal of QMS documents in SAP DMS",
+  "Audit précédent (EX-2026-01) : NCm sur une instruction de réception citant une procédure annulée. Migration des références documentaires vers SAP DMS en cours.":
+    "Previous audit (EX-2026-01): mNC on a receiving instruction citing a cancelled procedure.\n\nMigration of document references to SAP DMS in progress.",
+  "Responsable documentation": "Documentation manager",
+  "Pilote du processus Maîtrise documentaire": "Document control process owner",
+  "Assistante qualité": "Quality assistant",
+  "Gestion des diffusions": "Distribution management"
+};
+const I18N_CODES = 'C|PF|PP|OBS|NCm|NCM|NA';
+const at = s => String(s).replace(/ à (\d\d:\d\d)/g, ' at $1');
+const pl = (n, one, many) => `${n} ${+n > 1 ? many : one}`;
+/* listes de valeurs connues (processus...) : traduites seulement si chaque élément est connu */
+const trList = sep => m => { const p = m.split(sep); return p.length > 1 && p.every(x => Object.prototype.hasOwnProperty.call(I18N_EN, x.trim())) ? p.map(x => T(x.trim())).join(sep) : m; };
+const I18N_RX = [
+  [/^(\d+)\. (.+)$/, (m, a, b) => a + '. ' + T(b)],
+  [/^Chapitre (\d+)$/, 'Clause $1'],
+  [new RegExp(`^(${I18N_CODES}) (\\d+)$`), (m, c, n) => T(c) + ' ' + n],
+  [new RegExp(`^(${I18N_CODES}) (.+)$`), (m, c, l) => T(c) + ' ' + T(l)],
+  [new RegExp(`^(.+) \\((${I18N_CODES})\\)$`), (m, l, c) => T(l) + ' (' + T(c) + ')'],
+  [/^(\d+) sur (\d+)$/, '$1 of $2'],
+  [/^(\d+)\/(\d+) évaluées$/, '$1/$2 assessed'],
+  [/^(\d+) %$/, '$1%'],
+  [/^(\d+) exigences? de la checklist non évaluées?$/, (m, n) => pl(n, 'checklist requirement', 'checklist requirements') + ' not assessed'],
+  [new RegExp(`^§(.+) évaluée (${I18N_CODES}) sans constat rédigé$`), (m, c, e) => `§${c} rated ${T(e)} without a written finding`],
+  [/^§(.+) évaluée sans preuve notée$/, '§$1 assessed without evidence noted'],
+  [new RegExp(`^(.+) \\((${I18N_CODES})\\) : renseigner (l'exigence de référence|l'écart constaté|les preuves)$`), (m, n, c, f) => `${n} (${T(c)}): fill in ${{ "l'exigence de référence": 'the reference requirement', "l'écart constaté": 'the observed gap', 'les preuves': 'the evidence' }[f]}`],
+  [/^(.+) : exigence du référentiel non indiquée$/, '$1: requirement not specified'],
+  [/^(\d+) constats? sans référence Fabasoft$/, (m, n) => pl(n, 'finding', 'findings') + ' without a Fabasoft reference'],
+  [/^[Ff]ormulation imprécise \((.+)\) : indiquer le nombre de cas sur l'échantillon examiné$/, (m, w) => (m[0] === 'F' ? 'V' : 'v') + 'ague wording (' + w + '): state the number of cases in the sample examined'],
+  [/^(\d+) audits?, (\d+) constats?$/, (m, a, k) => pl(a, 'audit', 'audits') + ', ' + pl(k, 'finding', 'findings')],
+  [/^(\d+) constats?$/, (m, n) => pl(n, 'finding', 'findings')],
+  [/^Enregistré à (.+)$/, 'Saved at $1'],
+  [/^Créé le (.+?), modifié le (.+?)(?:, dernier export le (.+?)|(, jamais exporté))\.$/, (m, c, u, e, never) => at(`Created on ${c}, modified on ${u}${e ? ', last exported on ' + e : ', never exported'}.`)],
+  [/^exigences retenues, durée estimée (\d+) h (\d+)$/, 'requirements selected, estimated time $1 h $2'],
+  [/^Ajouter les exigences des processus du dossier \((\d+)\)$/, "Add the requirements of the file's processes ($1)"],
+  [/^Durée estimée sur la base de (.+) min par exigence \(réglable dans Paramètres\)\.$/, 'Estimated time based on $1 min per requirement (adjustable in Settings).'],
+  [/^Le plan Word reprend aussi les objectifs, le périmètre, les éléments d'entrée et (\d+) documents? à tenir à disposition\.$/, (m, n) => `The Word plan also includes the objectives, the scope, the inputs and ${pl(n, 'document', 'documents')} to have available.`],
+  [/^(\d+) exigences? déjà évaluées? ou annotées? : les évaluations et preuves seront perdues\. Les constats rédigés sont conservés\.$/, (m, n) => `${pl(n, 'requirement', 'requirements')} already assessed or annotated: assessments and evidence will be lost. Written findings are kept.`],
+  [/^Documents internes : (.*)$/, 'Internal documents: $1'],
+  [/^Documents : (.*)$/, 'Documents: $1'],
+  [/^Preuves : (.*)$/, 'Evidence: $1'],
+  [/^(.+) \(point libre\)$/, '$1 (free point)'],
+  [/^Toutes les étapes \((\d+)\)$/, 'All stages ($1)'],
+  [/^(\d+) audits? modifiés? depuis le dernier export\. Les données ne sont conservées que dans ce navigateur, sur cet appareil\.$/, (m, n) => `${pl(n, 'audit', 'audits')} changed since the last export. Data is only kept in this browser, on this device.`],
+  [/^(\d+) (?:audit sélectionné|audits sélectionnés)$/, (m, n) => pl(n, 'audit selected', 'audits selected')],
+  [/^(\d\d\/\d\d\/\d{4}) au (\d\d\/\d\d\/\d{4})$/, '$1 to $2'],
+  [/^Du (\S+) au (\S+)$/, 'From $1 to $2'],
+  [/^Le (\d\d\/\d\d\/\d{4})$/, 'On $1'],
+  [/^Indice (.+)$/, 'Revision $1'],
+  [/^(\d+) exigences?(?:, dont (\d+) issues? d'un import)?\. Un clic sur une ligne permet de la modifier\.$/, (m, n, i) => `${pl(n, 'requirement', 'requirements')}${i ? `, ${i} from an import` : ''}. Click a row to edit it.`],
+  [/^Processus du site : (.*)$/, (m, l) => 'Site processes: ' + trList(' ; ')(l)],
+  [/^Supprimer §(.+) du référentiel \? Les audits existants conservent leurs checklists\.$/, 'Delete §$1 from the requirements? Existing audits keep their checklists.'],
+  [/^Exigence (.+)$/, (m, c) => /^\d/.test(c) ? 'Requirement ' + c : m],
+  [/^(.+) \((\d+) lignes\)$/, '$1 ($2 rows)'],
+  [/^Source : (.*)$/, (m, s) => 'Source: ' + T(s)],
+  [/^Import (.+) du (\d\d\/\d\d\/\d{4})$/, (m, f, d) => 'Import ' + T(f) + ' of ' + d],
+  [/^(\d+) lignes? lues? : (\d+) exigences? ajoutées?(?:, (\d+) mises? à jour)?\.$/, (m, r, a, u) => `${pl(r, 'row', 'rows')} read: ${pl(a, 'requirement', 'requirements')} added${u ? `, ${u} updated` : ''}.`],
+  [/^Processus trouvés dans le fichier et absents des paramètres : (.+)\. Les ajouter dans Paramètres pour filtrer dessus\.$/, 'Processes found in the file and missing from the settings: $1. Add them in Settings to filter on them.'],
+  [/^Export impossible : (.*)$/, 'Export failed: $1'],
+  [/^Enregistrement impossible : (.*)$/, 'Saving failed: $1'],
+  [/^Impression impossible : (.*)$/, 'Printing failed: $1'],
+  [/^Lecture impossible : (.*)$/, (m, e) => 'Reading failed: ' + T(e)],
+  [/^(\d\d:\d\d) à (\d\d:\d\d)$/, '$1 to $2'],
+  [/^Rapport d'audit interne (.+?)(?:, indice (.+))?$/, (m, n, i) => `Internal audit report ${n}${i ? ', revision ' + i : ''}`],
+  [/^Plan d'audit interne (.+)$/, 'Internal audit plan $1'],
+  [/^Checklist d'audit (.+)$/, 'Audit checklist $1'],
+  [/^La base contient déjà l'audit (.+), modifié le (.+)\. Le fichier date du (.+)\.$/, (m, a, u, f) => at(`The database already contains audit ${a}, modified on ${u}. The file is dated ${f}.`)],
+  [/^(\d+) audits? ajoutés?, (\d+) mis à jour(?:, (\d+) déjà à jour sur cet appareil)?\.$/, (m, a, u, k) => `${pl(a, 'audit', 'audits')} added, ${u} updated${k ? `, ${k} already up to date on this device` : ''}.`],
+  [/^Le fichier contient (\d+) audits? et (\d+) exigences? au référentiel\.$/, (m, a, r) => `The file contains ${pl(a, 'audit', 'audits')} and ${pl(r, 'requirement', 'requirements')}.`],
+  [/^(\d+) audits? d'exemple chargés?\.$/, (m, n) => pl(n, 'sample audit', 'sample audits') + ' loaded.'],
+  [/^, sa checklist et (\d+) constats? de cet appareil \?$/, (m, n) => `, its checklist and ${pl(n, 'finding', 'findings')} from this device?`],
+  [/^Supprimer définitivement ces (\d+) audits et leurs (\d+) constats? de cet appareil \?$/, (m, a, k) => `Permanently delete these ${a} audits and their ${pl(k, 'finding', 'findings')} from this device?`],
+  [/^(\d+) audits? n'(?:ont|a) pas été exportés? depuis sa dernière modification\. Exporter en JSON avant de supprimer si les données doivent être conservées\.$/, (m, n) => `${pl(n, 'audit has', 'audits have')} not been exported since the last change. Export to JSON before deleting if the data must be kept.`],
+  [/^Supprimer les (\d+) audits$/, 'Delete the $1 audits'],
+  [/^(\d+) audits supprimés\.$/, '$1 audits deleted.'],
+  [/^(\d+) exigences? ajoutées?\.$/, (m, n) => pl(n, 'requirement', 'requirements') + ' added.'],
+  [/^Supprimer le constat (.+) \?$/, 'Delete finding $1?'],
+  [new RegExp(`^Évaluation (${I18N_CODES}) : penser à rédiger le constat\\.$`), (m, c) => `Assessment ${T(c)}: remember to write the finding.`],
+  [/^(.+) \((\d+)\)$/, (m, a, b) => { const t = T(a); return t === a ? m : t + ' (' + b + ')'; }],
+  [/^(\S+) : (.+)$/, (m, a, b) => { const t = T(b); return t === b ? m : a + ': ' + t; }],
+  [/^.+ ; .+$/, trList(' ; ')],
+  [/^.+, .+$/, trList(', ')]
+];
+/* ---------- moteur de traduction (identique dans les trois outils) ---------- */
+function T(s) {
+  if (LANG !== 'en' || s == null || s === '') return s;
+  const str = String(s), k = str.replace(/\s+/g, ' ').trim();
+  if (!k) return str;
+  let out = null;
+  if (Object.prototype.hasOwnProperty.call(I18N_EN, k)) out = I18N_EN[k];
+  else for (const [re, rep] of I18N_RX) { if (re.test(k)) { const r = k.replace(re, rep); if (r !== k) { out = r; break; } } }
+  if (out === null || out === k) return str;
+  const m = /^(\s*)[\s\S]*?(\s*)$/.exec(str);
+  return m[1] + out + m[2];
+}
+/* Texte d'un document HTML ou XML (rapports, Word, Excel, Visio) */
+function trMarkup(s) {
+  if (LANG !== 'en') return s;
+  const unx = x => x.replace(/&(amp|lt|gt|quot|#39|apos);/g, (m, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" }[e]));
+  const rex = x => x.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return String(s).replace(/>([^<>]+)</g, (m, txt) => { const raw = unx(txt), t = T(raw); return t === raw ? m : '>' + rex(t) + '<'; });
+}
+const I18N_ATTR = ['title', 'placeholder', 'aria-label', 'alt', 'label', 'data-l'];
+const I18N_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA']);
+function trText(n) {
+  const p = n.parentNode; if (!p || I18N_SKIP.has(p.nodeName)) return;
+  const t = T(n.data); if (t === n.data) return;
+  if (p.nodeName === 'OPTION' && !p.hasAttribute('value')) p.setAttribute('value', p.textContent);
+  n.data = t;
+}
+function trAttrs(el) {
+  for (const a of I18N_ATTR) { const v = el.getAttribute(a); if (v) { const t = T(v); if (t !== v) el.setAttribute(a, t); } }
+}
+function trTree(root) {
+  if (root.nodeType === 3) { const p = root.parentElement; if (p && !p.closest('[translate="no"]')) trText(root); return; }
+  if (root.nodeType !== 1 || root.closest('[translate="no"]')) return;
+  if (root.nodeName === 'TEXTAREA') { trAttrs(root); return; }
+  if (I18N_SKIP.has(root.nodeName)) return;
+  trAttrs(root);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: n => {
+      if (n.nodeType !== 1) return NodeFilter.FILTER_ACCEPT;
+      if (n.getAttribute('translate') === 'no') return NodeFilter.FILTER_REJECT;
+      if (n.nodeName === 'TEXTAREA') { trAttrs(n); return NodeFilter.FILTER_REJECT; }
+      return I18N_SKIP.has(n.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    } });
+  let n; while ((n = w.nextNode())) { if (n.nodeType === 3) trText(n); else trAttrs(n); }
+}
+if (LANG === 'en') {
+  document.title = T(document.title);
+  trTree(document.body);
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      if (m.type === 'childList') m.addedNodes.forEach(n => trTree(n));
+      else if (m.type === 'characterData') { const p = m.target.parentElement; if (p && !p.closest('[translate="no"]')) trText(m.target); }
+      else if (!m.target.closest('[translate="no"]')) { const v = m.target.getAttribute(m.attributeName); if (v) { const t = T(v); if (t !== v) m.target.setAttribute(m.attributeName, t); } }
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: I18N_ATTR });
+  for (const k of ['alert', 'confirm', 'prompt']) { const f = window[k]; window[k] = function (msg, ...r) { return f.call(window, T(msg), ...r); }; }
+}
+/* bouton FR / EN de l'en-tête : la page est rechargée dans l'autre langue (données déjà enregistrées) */
+(function () {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ghost'; b.id = 'btn-lang'; b.setAttribute('translate', 'no');
+  b.textContent = LANG === 'en' ? 'FR' : 'EN';
+  b.title = LANG === 'en' ? 'Passer en français' : 'Switch to English';
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('lang', LANG === 'en' ? 'fr' : 'en'); } catch (e) { /* stockage bloqué */ }
+    const u = new URL(location.href); u.searchParams.delete('lang');
+    if (u.href === location.href) location.reload(); else location.replace(u.href);
+  });
+  const th = document.getElementById('btn-theme');
+  if (th) th.parentNode.insertBefore(b, th); else document.querySelector('header').appendChild(b);
+  const show = () => document.documentElement.classList.remove('i18n-wait');
+  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(show));
+  setTimeout(show, 1500);
+})();
+</script>
+<script>
 'use strict';
 /* =====================================================================
    1. CONSTANTES MÉTIER
@@ -452,8 +1306,10 @@ const APPRECIATIONS = ['', 'Exigences satisfaites', 'Exigences satisfaites avec 
 const MOIS = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
 /* Mots qui rendent un constat imprécis : l'écart doit être quantifié sur l'échantillon examiné. */
-const MOTS_VAGUES = ['parfois', 'certains', 'certaines', 'quelques', 'pas toujours', 'souvent', 'globalement', 'plusieurs', 'manque de', 'insuffisant', 'insuffisante', 'pas assez', 'peu de'];
-const MOTS_SOLUTION = ['il faudrait', 'il faut', 'mettre en place', 'nous recommandons', 'recommand', 'devrait', 'devraient'];
+const MOTS_VAGUES = ['parfois', 'certains', 'certaines', 'quelques', 'pas toujours', 'souvent', 'globalement', 'plusieurs', 'manque de', 'insuffisant', 'insuffisante', 'pas assez', 'peu de',
+  'sometimes', 'some', 'a few', 'not always', 'often', 'generally', 'several', 'lack of', 'insufficient', 'not enough'];
+const MOTS_SOLUTION = ['il faudrait', 'il faut', 'mettre en place', 'nous recommandons', 'recommand', 'devrait', 'devraient',
+  'should', 'must', 'need to', 'needs to', 'implement', 'we recommend'];
 
 /* Structure commune à l'ISO 9001:2015 et à l'ISO 19443:2018 (intitulés abrégés).
    Le texte des exigences n'est pas reproduit : il vient de la synthèse interne importée. */
@@ -601,9 +1457,11 @@ const SETTINGS_DEFAUT = {
   minutesParExigence: 15,
   heureDebut: '08:30',
   referentiels: 'ISO 19443:2018 ; ISO 9001:2015',
-  libelles: { C: 'Conforme', PF: 'Point fort', PP: 'Piste de progrès', OBS: 'Observation', NCm: 'Non-conformité mineure', NCM: 'Non-conformité majeure', NA: 'Non audité' },
+  libelles: LANG === 'en'
+    ? { C: 'Compliant', PF: 'Strength', PP: 'Opportunity for improvement', OBS: 'Observation', NCm: 'Minor nonconformity', NCM: 'Major nonconformity', NA: 'Not audited' }
+    : { C: 'Conforme', PF: 'Point fort', PP: 'Piste de progrès', OBS: 'Observation', NCm: 'Non-conformité mineure', NCM: 'Non-conformité majeure', NA: 'Non audité' },
   processus: Object.keys(PROCESSUS_DEFAUT),
-  mentionFin: "Les constats sont enregistrés dans Fabasoft, où le processus audité apporte sa réponse : correction, analyse des causes et actions correctives. L'efficacité des actions est vérifiée avant la clôture des constats.",
+  mentionFin: T("Les constats sont enregistrés dans Fabasoft, où le processus audité apporte sa réponse : correction, analyse des causes et actions correctives. L'efficacité des actions est vérifiée avant la clôture des constats."),
   theme: 'auto',
   lastId: null
 };
@@ -650,7 +1508,7 @@ function cmpClause(a, b) {
 const chapOf = c => { const k = clauseKey(c)[0]; return k === 999 ? '' : String(k); };
 const chapLabel = ch => ch ? `${ch}. ${CHAPITRES[ch] || 'Chapitre ' + ch}` : 'Hors référentiel';
 const evalLabel = c => (store.settings.libelles || {})[c] || SETTINGS_DEFAUT.libelles[c] || 'Non évalué';
-const PLURIELS = { NCM: ['non-conformité majeure', 'non-conformités majeures'], NCm: ['non-conformité mineure', 'non-conformités mineures'], OBS: ['observation', 'observations'], PP: ['piste de progrès', 'pistes de progrès'], PF: ['point fort', 'points forts'], C: ['conforme', 'conformes'], NA: ['non audité', 'non audités'] };
+const PLURIELS = LANG === 'en' ? { NCM: ['major nonconformity', 'major nonconformities'], NCm: ['minor nonconformity', 'minor nonconformities'], OBS: ['observation', 'observations'], PP: ['opportunity for improvement', 'opportunities for improvement'], PF: ['strength', 'strengths'], C: ['compliant', 'compliant'], NA: ['not audited', 'not audited'] } : { NCM: ['non-conformité majeure', 'non-conformités majeures'], NCm: ['non-conformité mineure', 'non-conformités mineures'], OBS: ['observation', 'observations'], PP: ['piste de progrès', 'pistes de progrès'], PF: ['point fort', 'points forts'], C: ['conforme', 'conformes'], NA: ['non audité', 'non audités'] };
 /* Libellé en minuscules accordé au nombre ; un libellé personnalisé dans Paramètres est repris tel quel. */
 function typeLabel(c, n) {
   const l = evalLabel(c);
@@ -676,9 +1534,9 @@ function defaultReferentiel() {
   const procOf = {};
   Object.entries(PROCESSUS_DEFAUT).forEach(([p, cl]) => cl.forEach(c => (procOf[c] = procOf[c] || []).push(p)));
   return REF_DEFAUT.map(([clause, titre]) => ({
-    id: 'r' + clause.replace(/\./g, '-'), clause, titre, exigence: '', documents: '',
+    id: 'r' + clause.replace(/\./g, '-'), clause, titre: T(titre), exigence: '', documents: '',
     processus: (procOf[clause] || []).join(' ; '), nucleaire: false,
-    questions: (QUESTIONS_DEFAUT[clause] || []).slice(), source: 'Référentiel par défaut'
+    questions: (QUESTIONS_DEFAUT[clause] || []).map(q => T(q)), source: T('Référentiel par défaut')
   }));
 }
 
@@ -761,7 +1619,7 @@ function newAudit() {
   const s = store.settings, y = String(new Date().getFullYear()).slice(2);
   return normAudit({
     numero: `${s.prefixe || ''}${y}-`, referentiels: s.referentiels, lieu: s.site, pilote: s.auditeur,
-    objectifs: "Évaluer la conformité du processus aux exigences de l'ISO 19443 et aux dispositions internes du SMQ, ainsi que son efficacité."
+    objectifs: T("Évaluer la conformité du processus aux exigences de l'ISO 19443 et aux dispositions internes du SMQ, ainsi que son efficacité.")
   });
 }
 function itemFromRef(r) {
@@ -1029,20 +1887,20 @@ function proposePlan(a) {
   let t = toMin(store.settings.heureDebut) ?? 510;
   const rows = [], who = a.audites.filter(p => p.nom).map(p => p.nom).join(', ');
   const push = (sujet, dur, extra = {}) => {
-    if (t < 720 && t + dur > 735 && dur >= 30) { rows.push({ id: uid(), debut: toHHMM(Math.max(t, 720)), fin: toHHMM(Math.max(t, 720) + 60), sujet: 'Pause déjeuner', exigences: '', interlocuteurs: '', lieu: '' }); t = Math.max(t, 720) + 60; }
+    if (t < 720 && t + dur > 735 && dur >= 30) { rows.push({ id: uid(), debut: toHHMM(Math.max(t, 720)), fin: toHHMM(Math.max(t, 720) + 60), sujet: T('Pause déjeuner'), exigences: '', interlocuteurs: '', lieu: '' }); t = Math.max(t, 720) + 60; }
     rows.push(Object.assign({ id: uid(), debut: toHHMM(t), fin: toHHMM(t + dur), sujet, exigences: '', interlocuteurs: '', lieu: '' }, extra)); t += dur;
   };
-  push("Réunion d'ouverture : objectifs, périmètre, déroulement", 15, { interlocuteurs: who });
+  push(T("Réunion d'ouverture : objectifs, périmètre, déroulement"), 15, { interlocuteurs: who });
   const items = sortedItems(a), groups = [], seen = new Map();
   items.forEach(it => {
     const r = it.refId && refById(it.refId);
-    const p = (r && refProcs(r).find(x => a.processus.includes(x))) || chapLabel(chapOf(it.clause));
+    const p = (r && refProcs(r).find(x => a.processus.includes(x))) || T(chapLabel(chapOf(it.clause)));
     if (!seen.has(p)) { seen.set(p, { sujet: p, clauses: [] }); groups.push(seen.get(p)); }
     seen.get(p).clauses.push(it.clause);
   });
   groups.forEach(g => push(g.sujet, Math.max(15, Math.ceil(g.clauses.length * per / 15) * 15), { exigences: g.clauses.map(c => '§' + c).join(', ') }));
-  push('Synthèse des auditeurs', 30);
-  push('Réunion de clôture : présentation des constats', 30, { interlocuteurs: who });
+  push(T('Synthèse des auditeurs'), 30);
+  push(T('Réunion de clôture : présentation des constats'), 30, { interlocuteurs: who });
   return rows;
 }
 function panePlan(a) {
@@ -1142,7 +2000,7 @@ function exigenceText(src) {
   const clause = src.clause || (ref && ref.clause) || '', titre = src.titre || (ref && ref.titre) || '', docs = src.documents ?? (ref && ref.documents) ?? '';
   const exi = src.exigence ?? (ref && ref.exigence) ?? '';
   const refName = (cur() && cur().referentiels ? splitList(cur().referentiels)[0] : 'ISO 19443') || 'ISO 19443';
-  return [clause ? `${refName} §${clause} ${titre}`.trim() : titre, exi, docs ? 'Documents internes : ' + docs : ''].filter(Boolean).join('\n');
+  return [clause ? `${refName} §${clause} ${titre}`.trim() : titre, exi, docs ? (LANG === 'en' ? 'Internal documents: ' : 'Documents internes : ') + docs : ''].filter(Boolean).join('\n');
 }
 function paneConstats(a) {
   const list = sortedConstats(a);
@@ -1190,11 +2048,29 @@ function aidHTML(a, k) {
 }
 /* Texte prêt à coller dans la fiche Fabasoft : type, exigence, écart, preuves. */
 function constatText(a, k) {
+  if (LANG === 'en') return [`${T(evalLabel(k.type))} (${T(k.type)})${k.clause ? ', §' + k.clause : ''}`, k.exigence ? 'Requirement: ' + k.exigence : '', 'Finding: ' + (k.ecart || ''), k.preuve ? 'Evidence: ' + k.preuve : '', k.processus ? 'Process: ' + T(k.processus) : '', `Audit: ${a.numero}${a.titre ? ' ' + a.titre : ''}`].filter(Boolean).join('\n');
   return [`${evalLabel(k.type)} (${k.type})${k.clause ? ', §' + k.clause : ''}`, k.exigence ? 'Exigence : ' + k.exigence : '', 'Constat : ' + (k.ecart || ''), k.preuve ? 'Preuves : ' + k.preuve : '', k.processus ? 'Processus : ' + k.processus : '', `Audit : ${a.numero}${a.titre ? ' ' + a.titre : ''}`].filter(Boolean).join('\n');
 }
 
 /* ---------- Rapport ---------- */
+/* Synthèse proposée en anglais quand l'interface est en anglais */
+function draftSyntheseEN(a) {
+  const st = stats(a), list = sortedConstats(a);
+  const procs = a.processus.length ? a.processus.map(p => T(p)).join(', ') : (a.perimetre || 'the defined scope');
+  const ref = splitList(a.referentiels)[0] || 'ISO 19443';
+  const lbl = (t, n) => { const l = evalLabel(t); return (l === SETTINGS_DEFAUT.libelles[t] || T(l) !== l) && PLURIELS[t] ? PLURIELS[t][n > 1 ? 1 : 0] : l.charAt(0).toLowerCase() + l.slice(1); };
+  const parts = [];
+  parts.push(`The audit covered ${procs}${a.dateDebut ? (a.dateFin && a.dateFin !== a.dateDebut ? `, from ${fmtDate(a.dateDebut)} to ${fmtDate(a.dateFin)}` : `, on ${fmtDate(a.dateDebut)}`) : ''}. ${st.done} ${st.done > 1 ? 'requirements' : 'requirement'} of ${ref} ${st.done > 1 ? 'were' : 'was'} assessed out of ${st.total} planned.`);
+  const counts = CONSTAT_TYPES.filter(t => st.byType[t]).map(t => `${st.byType[t]} ${lbl(t, st.byType[t])}`);
+  parts.push(a.constats.length ? `${a.constats.length} ${a.constats.length > 1 ? 'findings were' : 'finding was'} raised: ${counts.join(', ')}.` : 'No finding was raised.');
+  const ecarts = list.filter(k => isEcart(k.type) && k.clause);
+  if (ecarts.length) parts.push(`${ecarts.length > 1 ? 'The gaps concern' : 'The gap concerns'} ${uniq(ecarts.map(k => '§' + clauseNum(k.clause))).join(', ')}.`);
+  const pf = list.filter(k => k.type === 'PF');
+  if (pf.length) parts.push(`Strengths noted: ${pf.map(k => k.ecart.trim().replace(/[.\s]+$/, '')).join('; ')}.`);
+  return parts.join('\n\n');
+}
 function draftSynthese(a) {
+  if (LANG === 'en') return draftSyntheseEN(a);
   const st = stats(a), list = sortedConstats(a);
   const procs = a.processus.length ? a.processus.join(', ') : (a.perimetre || 'le périmètre défini');
   const ref = splitList(a.referentiels)[0] || 'ISO 19443';
@@ -1235,7 +2111,7 @@ function paneRapport(a) {
 /* L'aperçu est le rapport tel qu'il sera imprimé, régénéré après chaque modification. */
 function refreshPreview() {
   const a = cur(), fr = $('#report-preview'); if (!a || !fr) return;
-  fr.srcdoc = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><style>${PRINT_CSS} body{padding:10mm 12mm;background:#fff} @media (max-width:600px){body{padding:4mm}}</style></head><body>${reportBody(a)}</body></html>`;
+  fr.srcdoc = trMarkup(`<!DOCTYPE html><html lang="${LANG}"><head><meta charset="utf-8"><style>${PRINT_CSS} body{padding:10mm 12mm;background:#fff} @media (max-width:600px){body{padding:4mm}}</style></head><body>${reportBody(a)}</body></html>`);
 }
 const debouncedPreview = debounce(refreshPreview, 500);
 
@@ -1414,7 +2290,7 @@ function doImport() {
   const rows = imp.sheets[imp.sheet].rows.slice(imp.header);
   const get = (r, k) => m[k] === undefined ? '' : String((r || [])[m[k]] ?? '').trim();
   const isYes = s => !!s && !/^(non|no|n|0|false|faux|-|na|n\/a)$/i.test(s.trim());
-  const defQ = {}; REF_DEFAUT.forEach(([c]) => defQ[c] = QUESTIONS_DEFAUT[c] || []);
+  const defQ = {}; REF_DEFAUT.forEach(([c]) => defQ[c] = (QUESTIONS_DEFAUT[c] || []).map(q => T(q)));
   const recs = []; let lastClause = '';
   rows.forEach(r => {
     let clause = get(r, 'clause');
@@ -1438,7 +2314,7 @@ function doImport() {
     });
     store.referentiel = [...merged.values()].map(r => {
       const def = REF_DEFAUT.find(([c]) => c === clauseNum(r.clause));
-      if (!r.titre && def) r.titre = def[1];
+      if (!r.titre && def) r.titre = T(def[1]);
       if (!r.questions.length && imp.keepQ) r.questions = (defQ[clauseNum(r.clause)] || []).slice();
       return r;
     });
@@ -1549,7 +2425,10 @@ const EVAL_HEX = { C: '6B7F8F', PF: '2E6B3A', PP: '3F6A8F', OBS: '9A6A12', NCm: 
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
 const X = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function datesText(a) { return a.dateDebut ? (a.dateFin && a.dateFin !== a.dateDebut ? `Du ${fmtDate(a.dateDebut)} au ${fmtDate(a.dateFin)}` : `Le ${fmtDate(a.dateDebut)}`) : ''; }
+function datesText(a) {
+  const en = LANG === 'en';
+  return a.dateDebut ? (a.dateFin && a.dateFin !== a.dateDebut ? `${en ? 'From' : 'Du'} ${fmtDate(a.dateDebut)} ${en ? 'to' : 'au'} ${fmtDate(a.dateFin)}` : `${en ? 'On' : 'Le'} ${fmtDate(a.dateDebut)}`) : '';
+}
 const synthParas = t => String(t || '').split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
 const PW = 9864; /* largeur utile A4 portrait en vingtièmes de point */
 function infoRows(a, plan) {
@@ -1599,7 +2478,7 @@ function planBlocks(a) {
   h1('Déroulement prévu');
   if (a.plan.length) {
     const cols = (multi ? [['Jour', 1100]] : []).concat([['Horaire', 1200], ['Séquence', multi ? 2900 : 3500], ['Exigences', 1500], ['Interlocuteurs', multi ? 1900 : 2200], ['Lieu', multi ? 1264 : 1464]]);
-    B.push({ k: 'table', cols, rows: a.plan.map(r => (multi ? [fmtDate(r.jour)] : []).concat([[r.debut, r.fin].filter(Boolean).join(' à '), { t: r.sujet, b: /ouverture|clôture/i.test(r.sujet) }, r.exigences, r.interlocuteurs, r.lieu])) });
+    B.push({ k: 'table', cols, rows: a.plan.map(r => (multi ? [fmtDate(r.jour)] : []).concat([[r.debut, r.fin].filter(Boolean).join(' à '), { t: r.sujet, b: /ouverture|clôture|opening|closing/i.test(r.sujet) }, r.exigences, r.interlocuteurs, r.lieu])) });
   } else B.push({ k: 'p', t: 'Déroulé à préciser.', i: true });
   const pers = a.audites.filter(p => p.nom || p.fonction);
   if (pers.length) { h1('Personnes à rencontrer'); B.push({ k: 'table', cols: [['Nom', 3600], ['Fonction', PW - 3600]], rows: pers.map(p => [p.nom, p.fonction]) }); }
@@ -1617,7 +2496,7 @@ function makeZip(files, mime) {
   const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
   const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
   for (const f of files) {
-    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(trMarkup(f.data)) : f.data, crc = crc32(data);
     const lh = new DataView(new ArrayBuffer(30));
     lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
     lh.setUint16(10, time, true); lh.setUint16(12, date, true); lh.setUint32(14, crc, true); lh.setUint32(18, data.length, true);
@@ -1700,7 +2579,7 @@ function docxPackage(body, footerText, title) {
   const footer = XML + `<w:ftr ${WNS}><w:p><w:pPr><w:pStyle w:val="Footer"/><w:tabs><w:tab w:val="right" w:pos="${PW}"/></w:tabs></w:pPr>${wRun(footerText, { color: '5F6B7A', sz: 16 })}${ftRun('<w:tab/><w:t xml:space="preserve">Page </w:t>')}<w:fldSimple w:instr=" PAGE ">${ftRun('<w:t>1</w:t>')}</w:fldSimple>${ftRun('<w:t xml:space="preserve"> sur </w:t>')}<w:fldSimple w:instr=" NUMPAGES ">${ftRun('<w:t>1</w:t>')}</w:fldSimple></w:p></w:ftr>`;
   const doc = XML + `<w:document ${WNS}><w:body>${body}<w:sectPr><w:footerReference w:type="default" r:id="rIdFtr"/><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1021" w:bottom="1134" w:left="1021" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   const hs = (id, name, sz, before, after, lvl, border) => `<w:style w:type="paragraph" w:styleId="${id}"><w:name w:val="${name}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="${before}" w:after="${after}"/>${border ? '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="2" w:color="C3C9D1"/></w:pBdr>' : ''}${lvl != null ? `<w:outlineLvl w:val="${lvl}"/>` : ''}</w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
-  const styles = XML + `<w:styles ${WNS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+  const styles = XML + `<w:styles ${WNS}><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:eastAsia="Calibri" w:cs="Calibri"/><w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="${LANG === 'en' ? 'en-GB' : 'fr-FR'}"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="100" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
 <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
 <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="200"/></w:pPr><w:rPr><w:b/><w:color w:val="2F3E4D"/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr></w:style>
 ${hs('Heading1', 'heading 1', 28, 320, 120, 0, true)}${hs('Heading2', 'heading 2', 23, 220, 100, 1, false)}
@@ -1725,7 +2604,7 @@ const xe = code => ({ v: code, ev: code });
 function colLetter(i) { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
 function buildXLSX(sheets) {
   const names = new Set();
-  sheets.forEach(sh => { let n = String(sh.name || 'Feuille').replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31), base = n, i = 2; while (names.has(n)) n = base.slice(0, 28) + ' ' + i++; names.add(n); sh.safe = n; });
+  sheets.forEach(sh => { let n = String(T(sh.name) || 'Feuille').replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31), base = n, i = 2; while (names.has(n)) n = base.slice(0, 28) + ' ' + i++; names.add(n); sh.safe = n; });
   const serial = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Math.round((Date.UTC(+m[1], +m[2] - 1, +m[3]) - Date.UTC(1899, 11, 30)) / 86400000) : null; };
   const sheetXml = sh => {
     const nc = sh.cols.length, last = colLetter(nc - 1) + (sh.rows.length + 1);
@@ -1791,7 +2670,7 @@ const PRINT_CSS = `@page{size:A4 portrait;margin:14mm 13mm}
   table.kv th{width:30%;background:#eef0f3} .visa td{height:13mm} .pb{page-break-before:always} p{margin:0 0 2.5mm;white-space:pre-wrap}
   .t{font-weight:700} .muted{color:#5f6b7a} thead{display:table-header-group}`;
 function printHTML(title, css, body) {
-  const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`;
+  const html = trMarkup(`<!doctype html><html lang="${LANG}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(title)}</title><style>${css}</style></head><body>${body}</body></html>`);
   if (Host.artifact()) {
     download(new Blob([html], { type: 'text/html' }), safeName(title) + '.html').then(ok => { if (ok) toast("Impression impossible dans cet affichage : ouvrir le fichier enregistré dans le navigateur, puis l'imprimer en PDF.", 8000); });
     return;
@@ -1837,7 +2716,7 @@ function exportChecklist(a) {
     .ev{display:flex;flex-wrap:wrap;gap:4mm;margin:1.5mm 0 1.5mm 17mm;font-size:8.5pt} .ev span{display:inline-flex;align-items:center;gap:1.2mm}
     .bx{display:inline-block;width:3.2mm;height:3.2mm;border:1px solid #1f2933} .ln{border-bottom:1px solid #c3c9d1;height:6.5mm;margin-left:17mm}
     .head{border-bottom:1px solid #2f3e4d;padding-bottom:2mm;margin-bottom:4mm} .head b{font-size:13pt}`;
-  let body = `<div class="head"><b>Checklist d'audit ${esc(a.numero)}</b> ${esc(a.titre)}<br><span class="muted">${esc(s.organisation)}${s.site ? ', ' + esc(s.site) : ''}. ${esc(datesText(a))}${a.pilote ? '. Auditeur : ' + esc(a.pilote) : ''}${a.processus.length ? '. Processus : ' + esc(a.processus.join(', ')) : ''}</span></div>`;
+  let body = `<div class="head"><b>Checklist d'audit ${esc(a.numero)}</b> ${esc(a.titre)}<br><span class="muted">${esc(s.organisation)}${s.site ? ', ' + esc(s.site) : ''}. ${esc(datesText(a))}${a.pilote ? (LANG === 'en' ? '. Auditor: ' : '. Auditeur : ') + esc(a.pilote) : ''}${a.processus.length ? (LANG === 'en' ? '. Processes: ' : '. Processus : ') + esc(a.processus.map(p => T(p)).join(', ')) : ''}</span></div>`;
   let lastCh = null;
   sortedItems(a).forEach(it => {
     const ch = chapOf(it.clause);
@@ -1883,7 +2762,7 @@ function importJSONText(text) {
   let d; try { d = JSON.parse(text); } catch (e) { toast('Fichier JSON illisible.'); return; }
   if (d && d.type === 'audit' && d.audit) {
     const a = normAudit(d.audit), ex = store.audits.find(x => x.id === a.id);
-    const add = copy => { if (copy) { a.id = uid(); a.numero += ' (copie)'; } store.audits.push(a); persist(true); openAudit(a.id, 'dossier'); toast('Audit importé.'); };
+    const add = copy => { if (copy) { a.id = uid(); a.numero += LANG === 'en' ? ' (copy)' : ' (copie)'; } store.audits.push(a); persist(true); openAudit(a.id, 'dossier'); toast('Audit importé.'); };
     if (!ex) return add(false);
     openModal('Audit déjà présent', `<p>La base contient déjà l'audit ${esc(auditLabel(ex))}, modifié le ${fmtDateTime(ex.updatedAt)}. Le fichier date du ${fmtDateTime(a.updatedAt)}.</p>`,
       [{ label: 'Annuler', act: closeModal }, { label: 'Ajouter comme copie', act: () => { closeModal(); add(true); } }, { label: 'Remplacer', cls: 'primary', act: () => { closeModal(); store.audits = store.audits.filter(x => x.id !== ex.id); add(false); } }]);
@@ -2002,6 +2881,11 @@ async function readRefFile(file) {
    ===================================================================== */
 function loadExamples() {
   const mk = (base, refsEval, constats) => {
+    /* exemples créés dans la langue de l'interface */
+    ['titre', 'perimetre', 'pilote', 'auditeurs', 'synthese', 'entrees'].forEach(k => { if (base[k]) base[k] = T(base[k]); });
+    (base.audites || []).forEach(p => { p.nom = T(p.nom); p.fonction = T(p.fonction); });
+    refsEval = refsEval.map(([c, ev, pr, ok]) => [c, ev, pr ? T(pr) : pr, ok]);
+    constats = constats.map(c => Object.assign({}, c, { ecart: T(c.ecart), preuve: T(c.preuve) }));
     const a = normAudit(Object.assign(newAudit(), base));
     refsEval.forEach(([clause, ev, preuves, ok]) => {
       const r = store.referentiel.find(x => x.clause === clause) || refsForClause(clause)[0];
@@ -2016,7 +2900,7 @@ function loadExamples() {
     if (base.withPlan) { a.plan = proposePlan(a); delete a.withPlan; }
     return normAudit(a);
   };
-  const exigenceTextFor = (a, it) => [`${splitList(a.referentiels)[0] || 'ISO 19443'} §${it.clause} ${it.titre}`, it.documents ? 'Documents internes : ' + it.documents : ''].filter(Boolean).join('\n');
+  const exigenceTextFor = (a, it) => [`${splitList(a.referentiels)[0] || 'ISO 19443'} §${it.clause} ${it.titre}`, it.documents ? (LANG === 'en' ? 'Internal documents: ' : 'Documents internes : ') + it.documents : ''].filter(Boolean).join('\n');
   const ex = [
     mk({ id: 'ex-2025-01', numero: 'EX-2025-01', titre: 'Achats et surveillance des fournisseurs', type: 'Audit interne processus', processus: ['Achats et fournisseurs'], perimetre: 'Commandes de pièces de fonderie et de visserie pour les pompes destinées au nucléaire', dateDebut: '2025-05-20', dateFin: '2025-05-21', pilote: 'Auditeur exemple', auditeurs: 'Co-auditeur exemple', statut: 'Rapport émis', indice: 'A', dateEmission: '2025-06-02', appreciation: 'Exigences satisfaites avec écarts mineurs',
       audites: [{ nom: 'Responsable achats', fonction: 'Pilote du processus Achats', ouverture: true, cloture: true }, { nom: 'Acheteur projets', fonction: 'Acheteur', ouverture: true, cloture: false }, { nom: 'Ingénieur qualité fournisseurs', fonction: 'Qualité fournisseurs', ouverture: false, cloture: true }],
@@ -2113,7 +2997,7 @@ const ACTIONS = {
   'prep-free': () => {
     const a = cur(), c = $('#free-clause').value.trim(), t = $('#free-titre').value.trim();
     if (!c && !t) { toast('Renseigner au moins un repère ou un intitulé.'); return; }
-    a.items.push({ id: uid(), refId: null, clause: c || 'Libre', titre: t, documents: '', exigence: '', nucleaire: false, questions: [], eval: '', preuves: '' });
+    a.items.push({ id: uid(), refId: null, clause: c || T('Libre'), titre: t, documents: '', exigence: '', nucleaire: false, questions: [], eval: '', preuves: '' });
     touch(a); renderTab(); refreshTabCounts();
   },
   'item-del': el => { const a = cur(), id = el.dataset.id || el.closest('[data-item]').dataset.item; removeItems(a, [id], () => { renderTab(); refreshTabCounts(); }); },

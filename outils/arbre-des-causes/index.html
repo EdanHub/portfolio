@@ -17,6 +17,20 @@
     document.documentElement.setAttribute('data-theme', t);
   })();
 </script>
+<script>
+  /* Langue partagée avec le site (clé 'lang', ou ?lang=en dans l'adresse) ; anglais si le navigateur n'est pas en français */
+  (function () {
+    var q = /[?&]lang=(fr|en)\b/.exec(location.search), s = null;
+    try { if (q) localStorage.setItem('lang', q[1]); s = localStorage.getItem('lang'); } catch (e) { /* stockage bloqué */ }
+    var l = s === 'fr' || s === 'en' ? s : q ? q[1] : (/^fr\b/i.test(navigator.language || 'fr') ? 'fr' : 'en');
+    window.LANG = l;
+    document.documentElement.lang = l;
+    if (l === 'en') {
+      document.documentElement.classList.add('i18n-wait');
+      var st = document.createElement('style'); st.textContent = '.i18n-wait body{visibility:hidden}'; document.head.appendChild(st);
+    }
+  })();
+</script>
 <!--
   Arbre des causes : création, capitalisation et export d'analyses de causes.
   Fichier autonome : HTML, CSS et JavaScript sans aucune dépendance externe.
@@ -330,7 +344,7 @@ table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
         </div>
       </div>
       <div class="canvas-wrap" id="canvas-wrap">
-        <svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="viewport"></g></svg>
+        <svg id="svg" translate="no" xmlns="http://www.w3.org/2000/svg"><g id="viewport"></g></svg>
         <div class="canvas-hint">Glisser un élément pour le déplacer, le déposer sur un autre pour le rattacher. Molette pour zoomer, glisser le fond pour se déplacer. Double-clic pour modifier le libellé.</div>
         <div class="canvas-hint touch-hint">Toucher un élément pour le modifier, le faire glisser pour le déplacer. Glisser le fond pour se déplacer, pincer pour zoomer.</div>
         <div class="empty-editor" id="empty-editor" hidden>
@@ -357,6 +371,613 @@ table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
 <input type="file" id="file-input" accept=".json,application/json" hidden>
 <iframe id="print-frame" title="Impression du rapport" style="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden"></iframe>
 
+<script>
+/* =====================================================================
+   LANGUE (FR / EN)
+   Le choix est partagé avec le site (localStorage 'lang', ou ?lang=en dans l'adresse).
+   L'interface est écrite en français. En anglais, chaque texte affiché dont le français
+   figure dans I18N_EN (ou correspond à un motif de I18N_RX) est remplacé à l'affichage ;
+   les données enregistrées (statuts, familles...) restent en français dans la base.
+   Les exports passent par T() (texte) et trMarkup() (HTML, XML Word, Excel, Visio).
+   Ajouter un texte français à l'interface = ajouter sa traduction ici.
+   ===================================================================== */
+const I18N_EN = {
+  /* en-tête, navigation, barre d'outils */
+  "Arbre des causes · Outils qualité": "Cause tree · Quality tools",
+  "Retour aux outils": "Back to the tools",
+  "← Outils": "← Tools",
+  "Arbre des causes": "Cause tree",
+  "analyse et retour d'expérience": "analysis and lessons learned",
+  "Thème sombre": "Dark theme",
+  "Thème clair": "Light theme",
+  "Analyses": "Analyses",
+  "Éditeur": "Editor",
+  "Bibliothèque de causes": "Cause library",
+  "Retour d'expérience": "Lessons learned",
+  "Paramètres": "Settings",
+  "Ajouter une cause sous l'élément sélectionné (Tab)": "Add a cause under the selected item (Tab)",
+  "Ajouter une cause au même niveau (Entrée)": "Add a cause at the same level (Enter)",
+  "Cause au même niveau": "Sibling cause",
+  "Supprimer l'élément et sa branche (Suppr)": "Delete the item and its branch (Del)",
+  "Supprimer": "Delete",
+  "Annuler (Ctrl+Z)": "Undo (Ctrl+Z)",
+  "Annuler": "Undo",
+  "Rétablir (Ctrl+Y)": "Redo (Ctrl+Y)",
+  "Rétablir": "Redo",
+  "Replier ou déplier la branche sélectionnée": "Collapse or expand the selected branch",
+  "Replier": "Collapse",
+  "Tout déplier": "Expand all",
+  "Dézoomer": "Zoom out",
+  "Zoomer": "Zoom in",
+  "Centrer et ajuster l'arbre à l'écran": "Centre and fit the tree to the screen",
+  "Ajuster": "Fit",
+  "Annuler les déplacements manuels et réorganiser": "Undo manual moves and rearrange",
+  "Réorganiser": "Rearrange",
+  "Sens de lecture de l'arbre": "Tree direction",
+  "Causes vers la droite": "Causes to the right",
+  "Causes vers la gauche": "Causes to the left",
+  "Causes vers le bas": "Causes downwards",
+  "Enregistrer une version": "Save a version",
+  "Exporter": "Export",
+  "Glisser un élément pour le déplacer, le déposer sur un autre pour le rattacher. Molette pour zoomer, glisser le fond pour se déplacer. Double-clic pour modifier le libellé.":
+    "Drag an item to move it, drop it on another to attach it. Scroll to zoom, drag the background to pan. Double-click to edit the label.",
+  "Toucher un élément pour le modifier, le faire glisser pour le déplacer. Glisser le fond pour se déplacer, pincer pour zoomer.":
+    "Tap an item to edit it, drag it to move it. Drag the background to pan, pinch to zoom.",
+  "Aucune analyse ouverte.": "No analysis open.",
+  "Nouvelle analyse": "New analysis",
+  "Ouvrir une analyse existante": "Open an existing analysis",
+  "Fermer": "Close",
+  "Impression du rapport": "Report printing",
+
+  /* types, familles, statuts */
+  "Événement": "Event",
+  "Cause immédiate": "Immediate cause",
+  "Cause contributive": "Contributing cause",
+  "Cause organisationnelle": "Organisational cause",
+  "Cause humaine": "Human cause",
+  "Cause technique": "Technical cause",
+  "Cause documentaire": "Documentary cause",
+  "Cause managériale": "Managerial cause",
+  "Cause racine": "Root cause",
+  "Action corrective": "Corrective action",
+  "Action préventive": "Preventive action",
+  "Main d'œuvre": "Manpower",
+  "Méthode": "Method",
+  "Matière": "Material",
+  "Milieu": "Environment",
+  "Mesure": "Measurement",
+  "Matériel": "Equipment",
+  "À vérifier": "To verify",
+  "Confirmée": "Confirmed",
+  "Écartée": "Ruled out",
+  "Ouverte": "Open",
+  "En cours": "In progress",
+  "Clôturée": "Closed",
+  "En retard": "Overdue",
+  "Non évaluée": "Not assessed",
+  "Efficace": "Effective",
+  "Non efficace": "Not effective",
+  "Mineure": "Minor",
+  "Significative": "Significant",
+  "Majeure": "Major",
+  "Critique": "Critical",
+  "En validation": "In review",
+  "Archivée": "Archived",
+
+  /* questions d'investigation */
+  "Que s'est-il passé exactement, où et quand ?": "What exactly happened, where and when?",
+  "Quel écart par rapport à l'exigence ou à l'attendu ?": "What is the gap with the requirement or the expected result?",
+  "Quelles conséquences ont été constatées ?": "What consequences were observed?",
+  "Pourquoi cela est-il arrivé ?": "Why did this happen?",
+  "Qu'est-ce qui a permis que cela arrive ?": "What allowed this to happen?",
+  "Quel fait vérifiable le démontre ?": "What verifiable fact shows it?",
+  "Quel mécanisme de prévention ou de détection aurait dû l’empêcher ?": "Which prevention or detection mechanism should have stopped it?",
+  "Pourquoi ce mécanisme n'a-t-il pas fonctionné ?": "Why did this mechanism not work?",
+  "Existe-t-il un problème systémique sous-jacent ?": "Is there an underlying systemic problem?",
+  "Si cette cause est traitée, le problème peut-il se reproduire ailleurs ?": "If this cause is dealt with, can the problem happen again elsewhere?",
+  "Cette cause relève-t-elle d'une décision ou d'une organisation que l'on peut modifier ?": "Does this cause come from a decision or an organisation that can be changed?",
+  "L'action supprime-t-elle la cause ou seulement l'effet ?": "Does the action remove the cause or only the effect?",
+  "Comment l'efficacité sera-t-elle vérifiée, et à quelle date ?": "How and when will effectiveness be checked?",
+  "L'action doit-elle être étendue à d'autres produits, postes ou sites ?": "Should the action be extended to other products, workstations or sites?",
+
+  /* bibliothèque par défaut */
+  "Procédure obsolète": "Obsolete procedure",
+  "Procédure ambiguë": "Ambiguous procedure",
+  "Procédure absente": "Missing procedure",
+  "Document au mauvais indice au poste de travail": "Wrong document revision at the workstation",
+  "Diffusion documentaire insuffisante": "Inadequate document distribution",
+  "Validation documentaire incomplète": "Incomplete document approval",
+  "Formation insuffisante": "Insufficient training",
+  "Mauvaise compréhension de la consigne": "Instruction misunderstood",
+  "Erreur de manipulation": "Handling error",
+  "Habilitation non vérifiée": "Qualification not checked",
+  "Interruption de tâche non maîtrisée": "Uncontrolled task interruption",
+  "Charge de travail excessive": "Excessive workload",
+  "Ressources insuffisantes": "Insufficient resources",
+  "Priorités conflictuelles": "Conflicting priorities",
+  "Responsabilités non définies": "Undefined responsibilities",
+  "Interface entre services mal définie": "Poorly defined interface between departments",
+  "Panne équipement": "Equipment failure",
+  "Maintenance préventive insuffisante": "Insufficient preventive maintenance",
+  "Moyen de mesure non étalonné": "Uncalibrated measuring equipment",
+  "Outillage inadapté": "Unsuitable tooling",
+  "Absence de vérification indépendante": "No independent check",
+  "Indicateurs de suivi absents": "No tracking indicators",
+  "Retour d'expérience non exploité": "Lessons learned not used",
+  "Exigence client non déclinée": "Customer requirement not flowed down",
+  "Mettre à jour la procédure et la rediffuser": "Update the procedure and redistribute it",
+  "Retirer les documents périmés des postes": "Remove outdated documents from workstations",
+  "Former et habiliter les opérateurs concernés": "Train and qualify the operators concerned",
+  "Ajouter un point de contrôle au plan de contrôle": "Add a checkpoint to the inspection plan",
+  "Mettre en place une vérification indépendante": "Set up an independent check",
+  "Intégrer le sujet à l'audit de poste": "Include the topic in the workstation audit",
+
+  /* enregistrement, modèle */
+  "Enregistrement impossible : espace de stockage du navigateur saturé. Exporter la base puis supprimer d'anciennes analyses.":
+    "Cannot save: browser storage is full. Export the database, then delete old analyses.",
+  "Enregistrement...": "Saving...",
+  "Fait observé": "Observed fact",
+  "Fait observé à décrire": "Observed fact to describe",
+  "Copie de": "Copy of",
+  "Responsable": "Owner",
+  "Échéance": "Due date",
+  "à définir": "to be defined",
+  "Hypothèse écartée": "Hypothesis ruled out",
+  "(sans libellé)": "(no label)",
+  "Cause racine à formuler": "Root cause to be stated",
+  "Action à définir": "Action to be defined",
+  "Nouvelle cause": "New cause",
+  "L'événement ne peut pas être supprimé : il porte l'analyse.": "The event cannot be deleted: the analysis is built on it.",
+
+  /* fiche de l'élément */
+  "Élément": "Item",
+  "Dossier": "Details",
+  "Contrôle": "Check",
+  "Sélectionner un élément de l'arbre pour le modifier.": "Select an item in the tree to edit it.",
+  "Démarche conseillée": "Recommended approach",
+  "Décrire le fait observé dans l'événement (fait vérifiable, sans interprétation).": "Describe the observed fact in the event (verifiable fact, no interpretation).",
+  "Ajouter les causes immédiates, puis remonter avec « Pourquoi ? » jusqu'aux causes racines.": "Add the immediate causes, then keep asking “Why?” up to the root causes.",
+  "Étayer chaque cause par une preuve ou l'écarter.": "Support each cause with evidence or rule it out.",
+  "Associer au moins une action à chaque cause racine.": "Link at least one action to each root cause.",
+  "Choisir dans la bibliothèque": "Pick from the library",
+  "Sélectionner une entrée": "Select an entry",
+  "Non renseignée": "Not specified",
+  "Statut": "Status",
+  "Efficacité": "Effectiveness",
+  "Référence (CAPA...)": "Reference (CAPA...)",
+  "Échéance dépassée : l'action apparaît « En retard ».": "Due date passed: the action shows as “Overdue”.",
+  "Éléments factuels constatés": "Facts observed",
+  "Preuve, élément factuel": "Evidence, fact",
+  "Constat, enregistrement, entretien, mesure...": "Observation, record, interview, measurement...",
+  "Référence associée": "Related reference",
+  "Commentaire": "Comment",
+  "Ajouter une cause": "Add a cause",
+  "Ajouter une action": "Add an action",
+  "Monter": "Move up",
+  "Descendre": "Move down",
+  "Ajouter à la bibliothèque": "Add to the library",
+  "Questions d'investigation": "Investigation questions",
+  "Numéro": "Number",
+  "Titre": "Title",
+  "Date de l'événement": "Event date",
+  "Gravité": "Severity",
+  "Processus concerné": "Process concerned",
+  "Description du problème": "Problem description",
+  "Conséquences observées": "Observed consequences",
+  "Référence RI": "RI reference",
+  "Référence FNC": "NCR reference",
+  "Référence CAPA": "CAPA reference",
+  "Autre (audit, client...)": "Other (audit, customer...)",
+  "Auteur": "Author",
+  "Validateur": "Approver",
+  "Proposer cette analyse comme modèle réutilisable": "Offer this analysis as a reusable template",
+  "Évaluation indicative de la maturité de l'analyse, recalculée à chaque modification.": "Indicative assessment of the analysis maturity, recalculated at every change.",
+  "Complétude": "Completeness",
+  "Robustesse": "Robustness",
+  "Traçabilité": "Traceability",
+  "Points à traiter": "Points to address",
+  "Aucun point bloquant détecté.": "No blocking point found.",
+  "Description du problème non renseignée.": "Problem description not filled in.",
+  "Le fait observé (événement) n'est pas décrit.": "The observed fact (event) is not described.",
+  "Aucune cause identifiée.": "No cause identified.",
+  "Aucune cause racine identifiée : poursuivre le questionnement « Pourquoi ? ».": "No root cause identified: keep asking “Why?”.",
+  "Cause racine sans action associée": "Root cause without an action",
+  "Cause insuffisamment investiguée (arrêt au premier niveau)": "Cause not investigated enough (stopped at the first level)",
+  "Branche sans cause racine": "Branch without a root cause",
+  "Cause sans élément de preuve": "Cause without evidence",
+  "Formulation trop générique": "Wording too generic",
+  "Action sans responsable": "Action without an owner",
+  "Action sans échéance": "Action without a due date",
+  "Action en retard": "Overdue action",
+  "Une version fige l'état complet de l'analyse (dossier et arbre). Les modifications courantes sont enregistrées automatiquement.":
+    "A version freezes the full state of the analysis (details and tree). Ongoing changes are saved automatically.",
+  "Commentaire de la nouvelle version": "Comment for the new version",
+  "Ex. : validation en revue CAPA du 14/10": "E.g. approved at the CAPA review of 14/10",
+  "Sans commentaire": "No comment",
+  "Restaurer": "Restore",
+  "Formulations proches déjà utilisées": "Similar wording already used",
+  "bibliothèque": "library",
+  "Cette formulation existe déjà dans la bibliothèque.": "This wording is already in the library.",
+  "Ajouté à la bibliothèque.": "Added to the library.",
+  "Sélectionner un élément qui possède une branche.": "Select an item that has a branch.",
+  "Analyse enregistrée dans le navigateur.": "Analysis saved in the browser.",
+  "Penser à exporter la base régulièrement (Analyses, Exporter la base).": "Remember to export the database regularly (Analyses, Export the database).",
+
+  /* liste des analyses */
+  "Toutes les analyses sont conservées dans ce navigateur. Recherche sur le numéro, le titre, la description, les causes, les actions et l'auteur.":
+    "All analyses are kept in this browser. Search covers the number, title, description, causes, actions and author.",
+  "Rechercher": "Search",
+  "Tous statuts": "All statuses",
+  "Toutes années": "All years",
+  "Tous auteurs": "All authors",
+  "Modèles uniquement": "Templates only",
+  "Comparer deux analyses": "Compare two analyses",
+  "Importer (JSON)": "Import (JSON)",
+  "Base complète": "Full database",
+  "Exporter la base (JSON)": "Export the database (JSON)",
+  "Sauvegarde complète : analyses, versions, bibliothèque, paramètres": "Full backup: analyses, versions, library, settings",
+  "Exporter la base (Excel)": "Export the database (Excel)",
+  "Tables à plat pour Power Query, Power BI ou Microsoft Lists": "Flat tables for Power Query, Power BI or Microsoft Lists",
+  "Charger trois analyses d'exemple": "Load three sample analyses",
+  "Pour découvrir l'outil et la vue REX": "To explore the tool and the lessons learned view",
+  "Processus": "Process",
+  "Causes racines": "Root causes",
+  "Actions ouvertes": "Open actions",
+  "Modifiée le": "Modified on",
+  "Aucune analyse ne correspond aux critères.": "No analysis matches the criteria.",
+  "Aucune analyse pour le moment. Créer une nouvelle analyse ou charger les exemples (menu Base complète).": "No analysis yet. Create a new analysis or load the samples (Full database menu).",
+  "Sélectionner pour comparer": "Select to compare",
+  "modèle": "template",
+  "Dupliquer": "Duplicate",
+  "Créer une nouvelle analyse à partir de cet arbre, sans les données du dossier": "Create a new analysis from this tree, without the case details",
+  "Réutiliser l'arbre": "Reuse the tree",
+  "Désarchiver": "Unarchive",
+  "Archiver": "Archive",
+  "Analyse A": "Analysis A",
+  "Analyse B": "Analysis B",
+  "Choisir deux analyses différentes.": "Choose two different analyses.",
+  "Proximité": "Similarity",
+  "Aucune cause commune détectée.": "No common cause found.",
+  "Répartition par famille": "Breakdown by category",
+  "Famille": "Category",
+  "racine": "root",
+
+  /* bibliothèque */
+  "Bibliothèque de causes et d'actions": "Library of causes and actions",
+  "Référentiel de formulations réutilisables. Lors de la saisie d'une cause, l'éditeur propose ces entrées et les formulations proches déjà utilisées. Le REX regroupe automatiquement les causes qui reprennent une entrée de la bibliothèque, ce qui en fait aussi la nomenclature des familles de causes.":
+    "A set of reusable wordings. While you type a cause, the editor suggests these entries and similar wordings already used. Lessons learned automatically group the causes that reuse a library entry, so the library is also the nomenclature of cause categories.",
+  "Ajouter une entrée": "Add an entry",
+  "Libellé": "Label",
+  "Ajouter": "Add",
+  "Utilisations": "Uses",
+  "Ajouter les entrées par défaut manquantes": "Add the missing default entries",
+  "Entrée ajoutée.": "Entry added.",
+
+  /* retour d'expérience */
+  "Synthèse de toutes les analyses enregistrées : causes récurrentes, familles, tendances et efficacité des actions. Données utilisables en revue de direction ou en revue de processus.":
+    "Summary of all saved analyses: recurring causes, categories, trends and action effectiveness. Data for a management or process review.",
+  "Tous sites": "All sites",
+  "Tous processus": "All processes",
+  "Inclure toutes les causes, pas seulement les causes racines": "Include all causes, not only root causes",
+  "Exporter la synthèse (Excel)": "Export the summary (Excel)",
+  "Aucune analyse ne correspond. Le REX se construit au fil des analyses ; les exemples du menu Analyses, Base complète permettent de le découvrir.":
+    "No analysis matches. Lessons learned build up over time; the samples in Analyses, Full database let you explore them.",
+  "Causes retenues": "Retained causes",
+  "Actions clôturées": "Closed actions",
+  "Actions en retard": "Overdue actions",
+  "Actions évaluées efficaces": "Actions rated effective",
+  "n.d.": "n/a",
+  "Causes racines les plus fréquentes": "Most frequent root causes",
+  "Causes les plus fréquentes": "Most frequent causes",
+  "Regroupement par entrée de la bibliothèque, puis par proximité de formulation.": "Grouped by library entry, then by similar wording.",
+  "Familles": "Categories",
+  "systémique": "systemic",
+  "récurrente": "recurring",
+  "Aucune cause racine enregistrée.": "No root cause recorded.",
+  "Toutes les causes retenues et causes racines par famille.": "All retained causes and root causes by category.",
+  "Aucune famille renseignée.": "No category filled in.",
+  "Toutes causes": "All causes",
+  "Types de causes": "Cause types",
+  "Nature des causes retenues dans les arbres.": "Nature of the causes retained in the trees.",
+  "Tendance par trimestre": "Quarterly trend",
+  "Causes racines par famille et par trimestre de l'événement.": "Root causes by category and by quarter of the event.",
+  "Causes par famille et par trimestre de l'événement.": "Causes by category and by quarter of the event.",
+  "Actions jugées efficaces": "Actions found effective",
+  "Actions dont l'efficacité a été évaluée, regroupées par formulation.": "Actions whose effectiveness was assessed, grouped by wording.",
+  "Aucune efficacité évaluée pour le moment. Renseigner le champ Efficacité des actions clôturées.": "No effectiveness assessed yet. Fill in the Effectiveness field of closed actions.",
+  "Problématiques systémiques": "Systemic issues",
+  "Causes présentes dans au moins deux analyses touchant des processus différents, ou dans trois analyses et plus.": "Causes found in at least two analyses covering different processes, or in three analyses or more.",
+  "Aucune problématique transverse détectée sur la période.": "No cross-cutting issue found over the period.",
+
+  /* paramètres */
+  "Ces réglages sont enregistrés dans ce navigateur et inclus dans l'export de la base.": "These settings are saved in this browser and included in the database export.",
+  "Identité et numérotation": "Identity and numbering",
+  "Votre nom (auteur par défaut)": "Your name (default author)",
+  "Organisation (rapports)": "Organisation (reports)",
+  "Site par défaut": "Default site",
+  "Préfixe de numérotation": "Numbering prefix",
+  "Présentation": "Display",
+  "Thème": "Theme",
+  "Automatique (système)": "Automatic (system)",
+  "Clair": "Light",
+  "Sombre": "Dark",
+  "Style des éléments": "Item style",
+  "Fond teinté, bordure colorée": "Tinted background, coloured border",
+  "Fond plein": "Solid background",
+  "Sens par défaut des nouveaux arbres": "Default direction of new trees",
+  "Classification des causes": "Cause classification",
+  "8M (Main d’œuvre, Méthode, Matière, Machine, Milieu, Management, Mesure, Maintenance)": "8M (Manpower, Method, Material, Machine, Environment, Management, Measurement, Maintenance)",
+  "5M (Main d’œuvre, Méthode, Milieu, Matière, Matériel)": "5M (Manpower, Method, Environment, Material, Equipment)",
+  "Couleurs par type d'élément": "Colours by item type",
+  "Rétablir les couleurs par défaut": "Restore default colours",
+  "Données": "Data",
+  "Importer une base ou une analyse (JSON)": "Import a database or an analysis (JSON)",
+  "Effacer toutes les données de ce navigateur": "Erase all data from this browser",
+  "Intégration Microsoft 365": "Microsoft 365 integration",
+  "L'outil n'utilise aucun serveur. Les formats produits sont choisis pour une intégration ultérieure : JSON documenté (identifiants stables, nœuds à plat avec identifiant du parent) déposable dans une bibliothèque SharePoint ou OneDrive et exploitable par Power Automate ; export Excel à plat de la base, importable dans Microsoft Lists ou dans Power Query et Power BI ; fichier .vsdx ouvrable dans Visio et Visio pour le web ; .docx modifiable partageable dans Teams. Le code isole le stockage (objet Storage) et les exports (registre Exporters) pour brancher plus tard un connecteur SharePoint sans modifier l'éditeur.":
+    "The tool uses no server. The output formats are chosen for later integration: documented JSON (stable IDs, flat nodes with their parent ID) that can be stored in a SharePoint or OneDrive library and used by Power Automate; a flat Excel export of the database, importable into Microsoft Lists or into Power Query and Power BI; a .vsdx file that opens in Visio and Visio for the web; an editable .docx to share in Teams. The code keeps storage (Storage object) and exports (Exporters registry) separate, so a SharePoint connector can be added later without changing the editor.",
+  "Arbre des causes, version 1.0. Fichier autonome, fonctionnement hors ligne.": "Cause tree, version 1.0. Standalone file, works offline.",
+  "Effacer toutes les analyses, la bibliothèque et les paramètres de ce navigateur ? Cette opération est irréversible.": "Erase all analyses, the library and the settings from this browser? This cannot be undone.",
+  "Confirmer la suppression définitive ?": "Confirm permanent deletion?",
+  "Fichier illisible : ce n'est pas un JSON valide.": "Unreadable file: not valid JSON.",
+  "Format non reconnu.": "Format not recognised.",
+  "Les exemples sont déjà présents.": "The samples are already there.",
+
+  /* exports */
+  "Rapport PDF": "PDF report",
+  "Ouvre l'impression : choisir Enregistrer au format PDF": "Opens printing: choose Save as PDF",
+  "Word (.docx) modifiable": "Editable Word (.docx)",
+  "Formes et connecteurs Word éditables, tableaux": "Editable Word shapes and connectors, tables",
+  "Formes indépendantes, connecteurs collés, données de forme": "Separate shapes, glued connectors, shape data",
+  "SVG structuré": "Structured SVG",
+  "Import dans Visio, PowerPoint ou Inkscape": "Import into Visio, PowerPoint or Inkscape",
+  "Image PNG": "PNG image",
+  "Pour un courriel ou une présentation": "For an email or a presentation",
+  "Causes, liens hiérarchiques, actions": "Causes, hierarchical links, actions",
+  "JSON (réimport)": "JSON (re-import)",
+  "Fichier de l’analyse à réimporter ou partager": "Analysis file to re-import or share",
+  "Rendu PNG impossible dans ce navigateur. Utiliser l’export SVG.": "PNG rendering not possible in this browser. Use the SVG export.",
+  "Autres références": "Other references",
+  "Aucune version figée": "No frozen version",
+  "Date d'édition": "Print date",
+  "Analyse des causes": "Cause analysis",
+  "Visas": "Sign-offs",
+  "Nom": "Name",
+  "Visa": "Signature",
+  "Rédigé par": "Written by",
+  "Vérifié par": "Checked by",
+  "Approuvé par": "Approved by",
+  "1. Description du problème": "1. Problem description",
+  "Non renseignée.": "Not filled in.",
+  "Non renseignées.": "Not filled in.",
+  "Synthèse": "Summary",
+  "2. Arbre des causes": "2. Cause tree",
+  "3. Causes identifiées": "3. Identified causes",
+  "N°": "No.",
+  "Cause de rang supérieur": "Higher-level cause",
+  "Preuve": "Evidence",
+  "4. Causes racines et actions associées": "4. Root causes and related actions",
+  "Aucune action": "No action",
+  "5. Plan d'actions": "5. Action plan",
+  "Cause traitée": "Cause addressed",
+  "6. Historique des versions": "6. Version history",
+  "Dans la fenêtre d'impression : Destination « Save as PDF », Layout « Landscape », Scale « Default ».": "In the print window: Destination “Save as PDF”, Layout “Landscape”, Scale “Default”.",
+  "Champ": "Field",
+  "Valeur": "Value",
+  "Chaque élément est une forme Word modifiable : cliquer sur l'arbre puis sur un élément pour en changer le texte, la couleur ou la position.":
+    "Each item is an editable Word shape: click the tree, then an item, to change its text, colour or position.",
+  "Arbre des causes : ouvrir avec Word 2010 ou ultérieur.": "Cause tree: open with Word 2010 or later.",
+  "Arbre de grande taille : réduit dans Word sur une page A3. L'export Visio conserve l'échelle réelle.": "Large tree: scaled down to an A3 page in Word. The Visio export keeps the real scale.",
+  "Type d'élément": "Item type",
+  "Date de création": "Creation date",
+  "Analyse": "Analysis",
+  "Arbre": "Tree",
+  "Plan d'actions": "Action plan",
+  "Éléments": "Items",
+  "Bibliothèque": "Library",
+  "Causes récurrentes": "Recurring causes",
+  "N° parent": "Parent no.",
+  "Niveau": "Level",
+  "Référence": "Reference",
+  "Créé le": "Created on",
+  "Créée le": "Created on",
+  "Identifiant": "ID",
+  "Identifiant parent": "Parent ID",
+  "Actions associées": "Related actions",
+  "RI": "RI",
+  "FNC": "NCR",
+  "Autre référence": "Other reference",
+  "Modèle": "Template",
+  "Conséquences": "Consequences",
+  "Oui": "Yes",
+  "Non": "No",
+  "Nb analyses": "No. of analyses",
+  "Issue de la bibliothèque": "From the library",
+  "Aucune analyse à exporter.": "No analysis to export.",
+
+  /* analyses d'exemple */
+  "Service qualité": "Quality department",
+  "Site exemple": "Sample site",
+  "Mode opératoire au mauvais indice en atelier de montage": "Work instruction at the wrong revision in the assembly shop",
+  "Maîtrise documentaire": "Document control",
+  "Audit interne AI-2026-04": "Internal audit AI-2026-04",
+  "Lors de l'audit interne du poste de montage des garnitures, le mode opératoire MO-245 présent au poste était à l'indice B alors que l'indice D est en vigueur depuis janvier.":
+    "During the internal audit of the seal assembly workstation, work instruction MO-245 at the station was at revision B whereas revision D has been in force since January.",
+  "Trois garnitures montées selon une séquence de serrage périmée, reprises avant expédition.": "Three seals assembled with an outdated tightening sequence, reworked before shipment.",
+  "Mode opératoire MO-245 à l’indice B utilisé au poste alors que l’indice D est en vigueur": "Work instruction MO-245 at revision B used at the station whereas revision D is in force",
+  "Constat d’audit, photo du document au poste": "Audit finding, photo of the document at the station",
+  "L'opérateur a utilisé l'exemplaire papier présent au poste": "The operator used the paper copy at the station",
+  "Entretien opérateur": "Operator interview",
+  "Document au mauvais indice au poste de travail : l'ancien exemplaire n'a pas été retiré à la diffusion de l'indice D": "Wrong document revision at the workstation: the old copy was not withdrawn when revision D was issued",
+  "Bordereau de diffusion sans liste de retrait": "Distribution slip without a withdrawal list",
+  "Diffusion documentaire insuffisante : pas de retrait tracé des exemplaires périmés": "Inadequate document distribution: no recorded withdrawal of outdated copies",
+  "Procédure PG-04 sans étape de retrait": "Procedure PG-04 has no withdrawal step",
+  "Retirer les documents périmés des postes de l’atelier de montage": "Remove outdated documents from the assembly shop workstations",
+  "Chef d’atelier": "Shop supervisor",
+  "Ajouter une liste de retrait signée au bordereau de diffusion (PG-04)": "Add a signed withdrawal list to the distribution slip (PG-04)",
+  "Gestionnaire documentaire": "Document controller",
+  "Opérateur non informé de la révision de l'indice D": "Operator not informed of revision D",
+  "Feuille d’émargement absente": "No attendance sheet",
+  "Formation insuffisante aux évolutions des modes opératoires": "Insufficient training on work instruction changes",
+  "Former et habiliter les opérateurs concernés sur l’indice D": "Train and qualify the operators concerned on revision D",
+  "Responsable production": "Production manager",
+  "Aucune vérification de l'indice lors de la prise de poste": "No revision check at shift start",
+  "Absence de vérification indépendante des documents en poste": "No independent check of documents at workstations",
+  "Intégrer le sujet à l'audit de poste mensuel (vérification des indices)": "Include the topic in the monthly workstation audit (revision check)",
+  "Couple de serrage hors tolérance sur brides de corps de pompe": "Tightening torque out of tolerance on pump casing flanges",
+  "Contrôle final : 4 brides sur 12 présentent un couple inférieur de 15 % à la valeur spécifiée.": "Final inspection: 4 flanges out of 12 show a torque 15% below the specified value.",
+  "Lot bloqué, reprise de serrage et contrôle à 100 %.": "Batch on hold, re-tightening and 100% inspection.",
+  "Couple de serrage inférieur de 15 % à la spécification sur 4 brides sur 12": "Tightening torque 15% below specification on 4 flanges out of 12",
+  "Clé dynamométrique déréglée utilisée pour le serrage": "Out-of-adjustment torque wrench used for tightening",
+  "Vérification métrologique du 05/06": "Metrology check of 05/06",
+  "Clé non présente dans le plan d'étalonnage": "Wrench not in the calibration plan",
+  "Moyen de mesure non étalonné : clé achetée hors circuit métrologie": "Uncalibrated measuring equipment: wrench bought outside the metrology process",
+  "Recenser et étalonner toutes les clés dynamométriques de l’atelier": "List and calibrate all torque wrenches in the shop",
+  "Métrologie": "Metrology",
+  "Ajouter un point de contrôle au plan de contrôle : vérification d’étalonnage avant serrage": "Add a checkpoint to the inspection plan: calibration check before tightening",
+  "Méthodes": "Methods",
+  "Opérateur intérimaire n'ayant pas identifié l'anomalie": "Temporary operator did not spot the anomaly",
+  "Entretien": "Interview",
+  "Formation insuffisante des nouveaux opérateurs au serrage contrôlé": "Insufficient training of new operators in controlled tightening",
+  "Former et habiliter les opérateurs concernés au serrage contrôlé": "Train and qualify the operators concerned in controlled tightening",
+  "Séquence de serrage en croix non décrite": "Cross tightening sequence not described",
+  "Procédure ambiguë sur la séquence et les paliers de serrage": "Ambiguous procedure on the tightening sequence and steps",
+  "Mettre à jour la procédure et la rediffuser avec schéma de séquence": "Update the procedure and redistribute it with a sequence diagram",
+  "Rapport d'inspection transmis au client sans signature du contrôleur": "Inspection report sent to the customer without the inspector's signature",
+  "Contrôle et inspection": "Inspection and testing",
+  "Réclamation client": "Customer complaint",
+  "Le dossier de fin de fabrication transmis au client contenait un rapport d'inspection dimensionnelle non signé.": "The end-of-manufacturing file sent to the customer contained an unsigned dimensional inspection report.",
+  "Réclamation client, réémission du dossier.": "Customer complaint, file reissued.",
+  "Rapport d'inspection dimensionnelle non signé dans le dossier transmis au client": "Unsigned dimensional inspection report in the file sent to the customer",
+  "Courriel client du 22/09": "Customer email of 22/09",
+  "Dossier envoyé sans relecture finale": "File sent without a final review",
+  "Absence de vérification indépendante avant l'envoi du dossier client": "No independent check before sending the customer file",
+  "Mettre en place une vérification indépendante des dossiers avant envoi": "Set up an independent check of files before sending",
+  "Responsable qualité projet": "Project quality manager",
+  "Envoi réalisé le dernier jour du mois pour respecter la facturation": "File sent on the last day of the month to meet invoicing",
+  "Charge de travail excessive en fin de mois sur le circuit de validation": "Excessive end-of-month workload in the approval circuit",
+  "Lisser les envois de dossiers sur le mois avec le planning projet": "Spread file dispatches over the month with the project schedule",
+  "Chef de projet": "Project manager",
+  "Contrôleur non informé que sa signature était requise": "Inspector not aware that a signature was required",
+  "Formation insuffisante au circuit de validation des rapports": "Insufficient training on the report approval circuit",
+  "Former et habiliter les contrôleurs au circuit de validation": "Train and qualify inspectors on the approval circuit"
+};
+/* Textes composés (nombres, libellés saisis) : motif appliqué au texte français normalisé */
+const I18N_RX = [
+  [/^Enregistré à (.+)$/, 'Saved at $1'],
+  [/^Élément rattaché à « (.*) »$/, 'Item attached to “$1”'],
+  [/^Supprimer cet élément et les (\d+) élément\(s\) rattaché\(s\) \?$/, 'Delete this item and the $1 attached item(s)?'],
+  [/^(.+), niveau de pourquoi (\d+)$/, (m, a, b) => T(a) + ', why level ' + b],
+  [/^Famille (5M|8M)$/, '$1 category'],
+  [/^Familles (5M|8M)$/, '$1 categories'],
+  [/^Créé le (\S+ \S+) par (.+)$/, (m, d, a) => 'Created on ' + d + ' by ' + T(a)],
+  [/^Créé le (\S+ \S+)$/, 'Created on $1'],
+  [/^Créée le (.+), modifiée le (.+)$/, 'Created on $1, modified on $2'],
+  [/^(\d+) %$/, '$1%'],
+  [/^(Cause racine sans action associée|Cause insuffisamment investiguée \(arrêt au premier niveau\)|Branche sans cause racine|Cause sans élément de preuve|Formulation trop générique|Action sans responsable|Action sans échéance|Action en retard) : (.*)$/, (m, a, b) => T(a) + ': ' + b],
+  [/^Enregistrer la version (\d+)$/, 'Save version $1'],
+  [/^\((.+), (\d+) %\)$/, (m, a, b) => '(' + T(a) + ', ' + b + '%)'],
+  [/^Version (\d+) enregistrée\.$/, 'Version $1 saved.'],
+  [/^Restaurer la version (\d+) \? L'état actuel sera d'abord enregistré comme nouvelle version\.$/, 'Restore version $1? The current state will first be saved as a new version.'],
+  [/^Version (\d+) restaurée\.$/, 'Version $1 restored.'],
+  [/^Sauvegarde automatique avant restauration de la version (\d+)$/, 'Automatic backup before restoring version $1'],
+  [/^(\d+) analyse\(s\) enregistrée\(s\) dans ce navigateur, (\d+) Ko\.$/, '$1 analysis(es) saved in this browser, $2 KB.'],
+  [/^(\d+) en retard$/, '$1 overdue'],
+  [/^Copie créée : (.+)$/, 'Copy created: $1'],
+  [/^Nouvelle analyse créée à partir de l'arbre de (.+)$/, 'New analysis created from the tree of $1'],
+  [/^Supprimer définitivement l'analyse (.+) \? Exporter au préalable en JSON si elle doit être conservée\.$/, 'Permanently delete analysis $1? Export it to JSON first if it must be kept.'],
+  [/^Causes communes ou proches \((\d+)\)$/, 'Common or similar causes ($1)'],
+  [/^Spécifiques à (.+) \((\d+)\)$/, 'Specific to $1 ($2)'],
+  [/^(\d+) entrée\(s\) ajoutée\(s\)\.$/, '$1 entry(ies) added.'],
+  [/^(\d{4}) T([1-4])$/, '$1 Q$2'],
+  [/^(.*), processus : (.*)$/, '$1, processes: $2'],
+  [/^La base est stockée localement dans ce navigateur \((\d+) Ko\)\. .*$/, 'The database is stored locally in this browser ($1 KB). It is neither shared nor synchronised: clearing the browser data deletes it. Export the database to JSON regularly (Analyses menu, Full database) and store it on OneDrive or SharePoint to back it up or pass it to a colleague, who will load it with Import (JSON).'],
+  [/^L'analyse (.+) existe déjà \(modifiée le (.+?)\)\. OK : remplacer par la version importée \(modifiée le (.+?)\)\. Annuler : importer comme copie\.$/, 'Analysis $1 already exists (modified on $2).\nOK: replace it with the imported version (modified on $3).\nCancel: import it as a copy.'],
+  [/^Import terminé : (\d+) ajoutée\(s\), (\d+) remplacée\(s\), (\d+) copie\(s\)(?:, (\d+) entrée\(s\) de bibliothèque)?\.$/, (m, a, b, c, d) => `Import complete: ${a} added, ${b} replaced, ${c} copied${d ? ', ' + d + ' library entries' : ''}.`],
+  [/^(\d+) analyse\(s\) d’exemple chargée\(s\)\.$/, '$1 sample analysis(es) loaded.'],
+  [/^Export impossible : (.*)$/, 'Export failed: $1'],
+  [/^Impression impossible : (.*)$/, 'Printing failed: $1'],
+  [/^Version (\d+) du (.+)$/, 'Version $1 of $2'],
+  [/^(\d+) cause\(s\) retenue\(s\), dont (\d+) cause\(s\) racine\(s\), et (\d+) action\(s\)\.$/, '$1 retained cause(s), including $2 root cause(s), and $3 action(s).'],
+  [/^Copie de (.+)$/, 'Copy of $1'],
+  [/^Nouvelle analyse \(modèle (.+)\)$/, 'New analysis (template $1)'],
+  [/^(.+) \((\d+)\)$/, (m, a, b) => { const t = T(a); return t === a ? m : t + ' (' + b + ')'; }]
+];
+/* ---------- moteur de traduction (identique dans les trois outils) ---------- */
+function T(s) {
+  if (LANG !== 'en' || s == null || s === '') return s;
+  const str = String(s), k = str.replace(/\s+/g, ' ').trim();
+  if (!k) return str;
+  let out = null;
+  if (Object.prototype.hasOwnProperty.call(I18N_EN, k)) out = I18N_EN[k];
+  else for (const [re, rep] of I18N_RX) { if (re.test(k)) { const r = k.replace(re, rep); if (r !== k) { out = r; break; } } }
+  if (out === null || out === k) return str;
+  const m = /^(\s*)[\s\S]*?(\s*)$/.exec(str);
+  return m[1] + out + m[2];
+}
+/* Texte d'un document HTML ou XML (rapports, Word, Excel, Visio) */
+function trMarkup(s) {
+  if (LANG !== 'en') return s;
+  const unx = x => x.replace(/&(amp|lt|gt|quot|#39|apos);/g, (m, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'", apos: "'" }[e]));
+  const rex = x => x.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  return String(s).replace(/>([^<>]+)</g, (m, txt) => { const raw = unx(txt), t = T(raw); return t === raw ? m : '>' + rex(t) + '<'; });
+}
+const I18N_ATTR = ['title', 'placeholder', 'aria-label', 'alt', 'label', 'data-l'];
+const I18N_SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA']);
+function trText(n) {
+  const p = n.parentNode; if (!p || I18N_SKIP.has(p.nodeName)) return;
+  const t = T(n.data); if (t === n.data) return;
+  if (p.nodeName === 'OPTION' && !p.hasAttribute('value')) p.setAttribute('value', p.textContent);
+  n.data = t;
+}
+function trAttrs(el) {
+  for (const a of I18N_ATTR) { const v = el.getAttribute(a); if (v) { const t = T(v); if (t !== v) el.setAttribute(a, t); } }
+}
+function trTree(root) {
+  if (root.nodeType === 3) { const p = root.parentElement; if (p && !p.closest('[translate="no"]')) trText(root); return; }
+  if (root.nodeType !== 1 || root.closest('[translate="no"]')) return;
+  if (root.nodeName === 'TEXTAREA') { trAttrs(root); return; }
+  if (I18N_SKIP.has(root.nodeName)) return;
+  trAttrs(root);
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: n => {
+      if (n.nodeType !== 1) return NodeFilter.FILTER_ACCEPT;
+      if (n.getAttribute('translate') === 'no') return NodeFilter.FILTER_REJECT;
+      if (n.nodeName === 'TEXTAREA') { trAttrs(n); return NodeFilter.FILTER_REJECT; }
+      return I18N_SKIP.has(n.nodeName) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    } });
+  let n; while ((n = w.nextNode())) { if (n.nodeType === 3) trText(n); else trAttrs(n); }
+}
+if (LANG === 'en') {
+  document.title = T(document.title);
+  trTree(document.body);
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      if (m.type === 'childList') m.addedNodes.forEach(n => trTree(n));
+      else if (m.type === 'characterData') { const p = m.target.parentElement; if (p && !p.closest('[translate="no"]')) trText(m.target); }
+      else if (!m.target.closest('[translate="no"]')) { const v = m.target.getAttribute(m.attributeName); if (v) { const t = T(v); if (t !== v) m.target.setAttribute(m.attributeName, t); } }
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: I18N_ATTR });
+  for (const k of ['alert', 'confirm', 'prompt']) { const f = window[k]; window[k] = function (msg, ...r) { return f.call(window, T(msg), ...r); }; }
+}
+/* bouton FR / EN de l'en-tête : la page est rechargée dans l'autre langue (données déjà enregistrées) */
+(function () {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn ghost'; b.id = 'btn-lang'; b.setAttribute('translate', 'no');
+  b.textContent = LANG === 'en' ? 'FR' : 'EN';
+  b.title = LANG === 'en' ? 'Passer en français' : 'Switch to English';
+  b.addEventListener('click', () => {
+    try { localStorage.setItem('lang', LANG === 'en' ? 'fr' : 'en'); } catch (e) { /* stockage bloqué */ }
+    const u = new URL(location.href); u.searchParams.delete('lang');
+    if (u.href === location.href) location.reload(); else location.replace(u.href);
+  });
+  const th = document.getElementById('btn-theme');
+  if (th) th.parentNode.insertBefore(b, th); else document.querySelector('header').appendChild(b);
+  const show = () => document.documentElement.classList.remove('i18n-wait');
+  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(show));
+  setTimeout(show, 1500);
+})();
+</script>
 <script>
 'use strict';
 /* =====================================================================
@@ -388,7 +1009,8 @@ const STATUTS_ACTION = ['Ouverte', 'En cours', 'Clôturée'];
 const EFFICACITES = ['Non évaluée', 'Efficace', 'Non efficace'];
 const GRAVITES = ['', 'Mineure', 'Significative', 'Majeure', 'Critique'];
 const STATUTS_ANALYSE = ['En cours', 'En validation', 'Clôturée', 'Archivée'];
-const GENERIQUES = ['erreur humaine', 'manque de rigueur', 'oubli', 'inattention', 'negligence', 'faute', 'probleme', 'non respect', 'manque d attention', 'erreur'];
+const GENERIQUES = ['erreur humaine', 'manque de rigueur', 'oubli', 'inattention', 'negligence', 'faute', 'probleme', 'non respect', 'manque d attention', 'erreur',
+  'human error', 'lack of rigour', 'oversight', 'carelessness', 'mistake', 'problem', 'non compliance', 'lack of attention', 'error'];
 
 const QUESTIONS = {
   event: ["Que s'est-il passé exactement, où et quand ?", "Quel écart par rapport à l'exigence ou à l'attendu ?", "Quelles conséquences ont été constatées ?"],
@@ -524,7 +1146,7 @@ function initStore() {
   store = s && s.analyses ? s : { schema: APP.schema, analyses: [], library: [], settings: {} };
   store.settings = Object.assign({}, DEFAULT_SETTINGS, store.settings || {});
   if (!Array.isArray(store.library) || (!store.library.length && !store._libInit)) {
-    store.library = DEFAULT_LIBRARY.map(([type, famille, label]) => ({ id: uid(), type, famille, label }));
+    store.library = DEFAULT_LIBRARY.map(([type, famille, label]) => ({ id: uid(), type, famille, label: T(label) }));
     store._libInit = true;
   }
   store.analyses.forEach(normalizeAnalysis);
@@ -539,7 +1161,7 @@ function normalizeAnalysis(an) {
       responsable: '', echeance: '', efficacite: '', reference: '', auteur: '', createdAt: an.createdAt, dx: 0, dy: 0, collapsed: false };
     for (const k in d) if (n[k] === undefined) n[k] = d[k];
   });
-  if (!an.nodes.some(n => !n.parentId)) an.nodes.unshift(mkNode({ type: 'evenement', label: an.titre || 'Fait observé' }));
+  if (!an.nodes.some(n => !n.parentId)) an.nodes.unshift(mkNode({ type: 'evenement', label: an.titre || T('Fait observé') }));
   return an;
 }
 let saveTimer = null;
@@ -601,8 +1223,8 @@ function actionStatus(n) {
   return n.statut || 'Ouverte';
 }
 function newAnalysis() {
-  const s = store.settings, root = mkNode({ type: 'evenement', label: 'Fait observé à décrire' });
-  return normalizeAnalysis({ id: uid(), numero: nextNumero(), titre: 'Nouvelle analyse', date: isoLocal(), site: s.site || '',
+  const s = store.settings, root = mkNode({ type: 'evenement', label: T('Fait observé à décrire') });
+  return normalizeAnalysis({ id: uid(), numero: nextNumero(), titre: T('Nouvelle analyse'), date: isoLocal(), site: s.site || '',
     auteur: s.auteur || '', orientation: s.orientation || 'droite', nodes: [root], versions: [], createdAt: nowIso(), updatedAt: nowIso() });
 }
 function cloneAnalysis(src, asTemplate) {
@@ -611,14 +1233,14 @@ function cloneAnalysis(src, asTemplate) {
   an.nodes.forEach(n => { n.id = map.get(n.id); n.parentId = n.parentId ? map.get(n.parentId) : null; n.createdAt = nowIso(); });
   an.id = uid(); an.numero = nextNumero(); an.versions = []; an.createdAt = an.updatedAt = nowIso(); an.statut = 'En cours'; an.modele = false;
   if (asTemplate) {
-    Object.assign(an, { titre: 'Nouvelle analyse (modèle ' + src.numero + ')', description: '', consequences: '', refRI: '', refFNC: '', refCAPA: '', refAutre: '',
+    Object.assign(an, { titre: T('Nouvelle analyse (modèle ' + src.numero + ')'), description: '', consequences: '', refRI: '', refFNC: '', refCAPA: '', refAutre: '',
       date: isoLocal(), validateur: '', auteur: store.settings.auteur || '', gravite: '' });
     an.nodes.forEach(n => {
       n.preuve = ''; n.auteur = store.settings.auteur || '';
       if (kindOf(n.type) === 'action') Object.assign(n, { statut: 'Ouverte', echeance: '', efficacite: '', responsable: '', reference: '' });
       else if (kindOf(n.type) === 'cause') n.statut = 'À vérifier';
     });
-  } else an.titre = 'Copie de ' + src.titre;
+  } else an.titre = T('Copie de ' + src.titre);
   return an;
 }
 function touch(an = cur()) { if (an) an.updatedAt = nowIso(); persist(); updateHeader(); }
@@ -659,10 +1281,11 @@ function metaOf(n, an) {
   if (k === 'event') { const p = [fmtDate(an.date), an.site].filter(Boolean).join(', '); return p ? [p] : []; }
   if (k === 'action') {
     const st = actionStatus(n);
-    const eff = n.efficacite && n.efficacite !== 'Non évaluée' ? ', ' + n.efficacite.toLowerCase() : '';
-    return ['Responsable : ' + (n.responsable || 'à définir'), 'Échéance : ' + (n.echeance ? fmtDate(n.echeance) : 'à définir') + ', ' + st.toLowerCase() + eff];
+    const eff = n.efficacite && n.efficacite !== 'Non évaluée' ? ', ' + T(n.efficacite).toLowerCase() : '';
+    const en = LANG === 'en';
+    return [(en ? 'Owner: ' : 'Responsable : ') + (n.responsable || T('à définir')), (en ? 'Due: ' : 'Échéance : ') + (n.echeance ? fmtDate(n.echeance) : T('à définir')) + ', ' + T(st).toLowerCase() + eff];
   }
-  if (n.statut === 'Écartée') return ['Hypothèse écartée'];
+  if (n.statut === 'Écartée') return [T('Hypothèse écartée')];
   return [];
 }
 function buildGeometry(an, opt = {}) {
@@ -673,8 +1296,8 @@ function buildGeometry(an, opt = {}) {
   (function walk(n, depth) {
     const t = TYPE[n.type] || TYPE.contributive, bold = n.type === 'evenement' || n.type === 'racine';
     const nb = num.get(n.id);
-    const typeLines = wrap((nb && nb !== 'E' ? nb + '   ' : '') + t.label + (n.famille ? ' (' + n.famille + ')' : ''), G.TFONT, G.W - 2 * G.PAD);
-    const lines = wrap(n.label || '(sans libellé)', bold ? G.BFONT : G.FONT, G.W - 2 * G.PAD);
+    const typeLines = wrap((nb && nb !== 'E' ? nb + '   ' : '') + T(t.label) + (n.famille ? ' (' + T(n.famille) + ')' : ''), G.TFONT, G.W - 2 * G.PAD);
+    const lines = wrap(n.label ? T(n.label) : T('(sans libellé)'), bold ? G.BFONT : G.FONT, G.W - 2 * G.PAD);
     const meta = metaOf(n, an).flatMap(m => wrap(m, G.MFONT, G.W - 2 * G.PAD));
     const h = G.PAD + typeLines.length * G.TYPE_H + 2 + lines.length * G.LINE_H + (meta.length ? 3 + meta.length * G.META_H : 0) + G.PAD - 2;
     const ch = kids.get(n.id) || [];
@@ -893,10 +1516,10 @@ function addNode(kind) {
   let parent = kind === 'sibling' ? (sel.parentId ? getNode(sel.parentId) : sel) : sel;
   if (kindOf(parent.type) === 'action') parent = getNode(parent.parentId) || root;
   let type, label;
-  if (kind === 'racine') { type = 'racine'; label = 'Cause racine à formuler'; }
-  else if (kind === 'corrective' || kind === 'preventive') { type = kind; label = 'Action à définir'; }
-  else if (kind === 'sibling' && sel !== root && kindOf(sel.type) === 'cause') { type = sel.type; label = 'Nouvelle cause'; }
-  else { type = parent === root ? 'immediate' : 'contributive'; label = 'Nouvelle cause'; }
+  if (kind === 'racine') { type = 'racine'; label = T('Cause racine à formuler'); }
+  else if (kind === 'corrective' || kind === 'preventive') { type = kind; label = T('Action à définir'); }
+  else if (kind === 'sibling' && sel !== root && kindOf(sel.type) === 'cause') { type = sel.type; label = T('Nouvelle cause'); }
+  else { type = parent === root ? 'immediate' : 'contributive'; label = T('Nouvelle cause'); }
   const sibs = childrenMap(an).get(parent.id) || [];
   const n = mkNode({ parentId: parent.id, type, label, order: sibs.length ? Math.max(...sibs.map(s => s.order)) + 1 : 0,
     statut: kindOf(type) === 'action' ? 'Ouverte' : 'À vérifier', efficacite: kindOf(type) === 'action' ? 'Non évaluée' : '' });
@@ -1096,7 +1719,7 @@ function saveVersion(an, commentaire) {
 function restoreVersion(an, n) {
   const v = an.versions.find(x => x.n === n); if (!v) return;
   if (!confirm(`Restaurer la version ${n} ? L'état actuel sera d'abord enregistré comme nouvelle version.`)) return;
-  saveVersion(an, 'Sauvegarde automatique avant restauration de la version ' + n);
+  saveVersion(an, T('Sauvegarde automatique avant restauration de la version ' + n));
   const keep = { id: an.id, versions: an.versions };
   Object.keys(an).forEach(k => delete an[k]); Object.assign(an, deep(v.snapshot), keep); normalizeAnalysis(an);
   hist.undo = []; hist.redo = []; selectedId = rootOf(an)?.id;
@@ -1113,7 +1736,7 @@ function checkAnalysis(an) {
   const lbl = n => (num.get(n.id) || '') + ' ' + (n.label || '').slice(0, 70);
   const hasAction = n => [...descendants(an, n.id)].some(id => kindOf(getNode(id, an)?.type) === 'action');
   if (!an.description.trim()) issues.push({ level: 'warn', text: 'Description du problème non renseignée.', tab: 'dossier' });
-  if (!root || !root.label.trim() || root.label === 'Fait observé à décrire') issues.push({ level: 'warn', text: "Le fait observé (événement) n'est pas décrit.", nodeId: root?.id });
+  if (!root || !root.label.trim() || root.label === 'Fait observé à décrire' || root.label === T('Fait observé à décrire')) issues.push({ level: 'warn', text: "Le fait observé (événement) n'est pas décrit.", nodeId: root?.id });
   if (!active.length) issues.push({ level: 'crit', text: 'Aucune cause identifiée.' });
   else if (!racines.length) issues.push({ level: 'crit', text: 'Aucune cause racine identifiée : poursuivre le questionnement « Pourquoi ? ».' });
   racines.forEach(n => { if (!hasAction(n)) issues.push({ level: 'crit', text: 'Cause racine sans action associée : ' + lbl(n), nodeId: n.id }); });
@@ -1369,7 +1992,7 @@ $('#view-library').addEventListener('click', e => {
     store.library.push({ id: uid(), type: $('#lib-new-type').value, famille: $('#lib-new-fam').value, label }); persist(); renderLibrary(); toast('Entrée ajoutée.');
   } else if (b.dataset.lib === 'del') { store.library = store.library.filter(l => l.id !== b.dataset.id); persist(); renderLibrary(); }
   else if (b.dataset.lib === 'reset') {
-    let n = 0; DEFAULT_LIBRARY.forEach(([type, famille, label]) => { if (!store.library.some(l => norm(l.label) === norm(label))) { store.library.push({ id: uid(), type, famille, label }); n++; } });
+    let n = 0; DEFAULT_LIBRARY.forEach(([type, famille, label0]) => { const label = T(label0); if (!store.library.some(l => norm(l.label) === norm(label))) { store.library.push({ id: uid(), type, famille, label }); n++; } });
     persist(); renderLibrary(); toast(n + ' entrée(s) ajoutée(s).');
   }
 });
@@ -1561,10 +2184,13 @@ function importData(data) {
 /* ---------- Exemples ---------- */
 function loadExamples() {
   const build = (meta, tree) => {
-    const an = normalizeAnalysis(Object.assign({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), auteur: store.settings.auteur || 'Service qualité', site: store.settings.site || 'Site exemple', orientation: 'droite', versions: [], nodes: [] }, meta));
+    /* exemples créés dans la langue de l'interface */
+    ['titre', 'processus', 'description', 'consequences', 'refAutre'].forEach(k => { if (meta[k]) meta[k] = T(meta[k]); });
+    const an = normalizeAnalysis(Object.assign({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), auteur: store.settings.auteur || T('Service qualité'), site: store.settings.site || T('Site exemple'), orientation: 'droite', versions: [], nodes: [] }, meta));
     an.nodes = [];
     (function add(spec, parentId, order) {
-      const [type, label, famille, extra, kids] = spec;
+      const [type, label0, famille, extra0, kids] = spec, label = T(label0), extra = Object.assign({}, extra0);
+      ['preuve', 'responsable'].forEach(k => { if (extra[k]) extra[k] = T(extra[k]); });
       const n = mkNode(Object.assign({ parentId, order, type, label, famille: famille || '', auteur: an.auteur, createdAt: an.createdAt,
         statut: kindOf(type) === 'action' ? 'Ouverte' : kindOf(type) === 'cause' ? 'Confirmée' : '', efficacite: kindOf(type) === 'action' ? 'Non évaluée' : '' }, extra || {}));
       an.nodes.push(n); (kids || []).forEach((k, i) => add(k, n.id, i));
@@ -1644,7 +2270,7 @@ function treeSVG(an) {
   let s = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Arial">`;
   s += `<title>${esc(an.numero + ' ' + an.titre)}</title><rect width="${W}" height="${H}" fill="#ffffff"/>`;
   s += `<g id="entete"><text x="${G.MARGIN}" y="26" font-size="15" font-weight="bold" fill="#1f2933">${esc(an.numero + '   ' + an.titre)}</text>`;
-  s += `<text x="${G.MARGIN}" y="44" font-size="11" fill="#5f6b7a">${esc(['Arbre des causes', fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</text></g>`;
+  s += `<text x="${G.MARGIN}" y="44" font-size="11" fill="#5f6b7a">${esc([T('Arbre des causes'), fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</text></g>`;
   s += `<g id="arbre" transform="translate(0,${HEAD})"><g id="connecteurs">`;
   g.edges.forEach(e => s += `<path d="M${e.pts.map(p => p.join(' ')).join(' L')}" fill="none" stroke="#8792a2" stroke-width="1.4"/>`);
   s += `</g><g id="elements">`;
@@ -1714,7 +2340,7 @@ function exportPDF(an) {
     </body></html>`;
   const fr = $('#print-frame');
   fr.onload = () => { setTimeout(() => { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) { toast('Impression impossible : ' + e.message); } }, 150); fr.onload = null; };
-  fr.srcdoc = html;
+  fr.srcdoc = LANG === 'en' ? trMarkup(html).replace('<html lang="fr">', '<html lang="en">') : html;
   toast("Dans la fenêtre d'impression : Destination « Save as PDF », Layout « Landscape », Scale « Default ».");
 }
 
@@ -1725,7 +2351,7 @@ function makeZip(files, mime) {
   const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
   const d = new Date(), time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
   for (const f of files) {
-    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data);
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(trMarkup(f.data)) : f.data, crc = crc32(data);
     const lh = new DataView(new ArrayBuffer(30));
     [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, time, 2], [12, date, 2], [14, crc, 4], [18, data.length, 4], [22, data.length, 4], [26, name.length, 2], [28, 0, 2]]
       .forEach(([o, v, s]) => s === 4 ? lh.setUint32(o, v, true) : lh.setUint16(o, v, true));
@@ -1780,9 +2406,9 @@ function exportDOCX(an) {
   geo2.nodes.forEach(I => {
     const s = I.style, ins = E(G.PAD);
     const txt = tp(I.typeLines.join(' '), { b: true, color: hex6(s.sub), sz: hs(10.5) }) + tp(I.n.label || '(sans libellé)', { b: I.bold, color: hex6(s.fg), sz: hs(13) }) + (I.meta.length ? metaOf(I.n, an).map(m => tp(m, { color: hex6(s.fg), sz: hs(11) })).join('') : '');
-    shapes += `<wps:wsp><wps:cNvPr id="${++sid}" name="${xesc((I.num || '') + ' ' + TYPE[I.n.type].label)}" descr="${xesc(I.n.label)}"/><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="${E(I.x)}" y="${E(I.y)}"/><a:ext cx="${E(I.w)}" cy="${E(I.h)}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="${hex6(s.fill)}"/></a:solidFill><a:ln w="${I.bold ? 19050 : 12700}"><a:solidFill><a:srgbClr val="${hex6(s.stroke)}"/></a:solidFill>${I.dashed ? '<a:prstDash val="dash"/>' : ''}</a:ln></wps:spPr><wps:txbx><w:txbxContent>${txt}</w:txbxContent></wps:txbx><wps:bodyPr rot="0" vert="horz" wrap="square" lIns="${ins}" tIns="${ins}" rIns="${ins}" bIns="${Math.round(ins / 2)}" anchor="t" anchorCtr="0"><a:noAutofit/></wps:bodyPr></wps:wsp>`;
+    shapes += `<wps:wsp><wps:cNvPr id="${++sid}" name="${xesc((I.num || '') + ' ' + T(TYPE[I.n.type].label))}" descr="${xesc(T(I.n.label))}"/><wps:cNvSpPr/><wps:spPr><a:xfrm><a:off x="${E(I.x)}" y="${E(I.y)}"/><a:ext cx="${E(I.w)}" cy="${E(I.h)}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="${hex6(s.fill)}"/></a:solidFill><a:ln w="${I.bold ? 19050 : 12700}"><a:solidFill><a:srgbClr val="${hex6(s.stroke)}"/></a:solidFill>${I.dashed ? '<a:prstDash val="dash"/>' : ''}</a:ln></wps:spPr><wps:txbx><w:txbxContent>${txt}</w:txbxContent></wps:txbx><wps:bodyPr rot="0" vert="horz" wrap="square" lIns="${ins}" tIns="${ins}" rIns="${ins}" bIns="${Math.round(ins / 2)}" anchor="t" anchorCtr="0"><a:noAutofit/></wps:bodyPr></wps:wsp>`;
   });
-  const drawing = `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${W}" cy="${H}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="Arbre des causes"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/><a:chOff x="0" y="0"/><a:chExt cx="${W}" cy="${H}"/></a:xfrm></wpg:grpSpPr>${shapes}</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:t>Arbre des causes : ouvrir avec Word 2010 ou ultérieur.</w:t></mc:Fallback></mc:AlternateContent></w:r></w:p>`;
+  const drawing = `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:jc w:val="center"/></w:pPr><w:r><mc:AlternateContent><mc:Choice Requires="wpg"><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${W}" cy="${H}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="${xesc(T('Arbre des causes'))}"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"><wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/><a:chOff x="0" y="0"/><a:chExt cx="${W}" cy="${H}"/></a:xfrm></wpg:grpSpPr>${shapes}</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing></mc:Choice><mc:Fallback><w:t>Arbre des causes : ouvrir avec Word 2010 ou ultérieur.</w:t></mc:Fallback></mc:AlternateContent></w:r></w:p>`;
 
   const PW = PORTRAIT.w - 2 * MAR, LW = A4L.w - 2 * MAR;
   let body = '';
@@ -1850,7 +2476,7 @@ function exportVSDX(an) {
       ['Reference', 'Référence associée', n.reference || [an.refRI, an.refFNC, an.refCAPA].filter(Boolean).join(', ')], ['Statut', 'Statut', k === 'action' ? actionStatus(n) : n.statut]];
     if (k === 'action') props.push(['Responsable', 'Responsable', n.responsable], ['Echeance', 'Échéance', fmtDate(n.echeance)], ['Efficacite', 'Efficacité', n.efficacite]);
     props.push(['Analyse', 'Analyse', an.numero]);
-    return `<Section N="Property">${props.map(([r, l, v], i) => `<Row N="${r}"><Cell N="Value" V="${xesc(v || '')}" U="STR"/><Cell N="Prompt" V=""/><Cell N="Label" V="${xesc(l)}"/><Cell N="Format" V=""/><Cell N="SortKey" V="${i}"/><Cell N="Type" V="0"/><Cell N="Invisible" V="0"/></Row>`).join('')}</Section>`;
+    return `<Section N="Property">${props.map(([r, l, v], i) => `<Row N="${r}"><Cell N="Value" V="${xesc(T(v || ''))}" U="STR"/><Cell N="Prompt" V=""/><Cell N="Label" V="${xesc(T(l))}"/><Cell N="Format" V=""/><Cell N="SortKey" V="${i}"/><Cell N="Type" V="0"/><Cell N="Invisible" V="0"/></Row>`).join('')}</Section>`;
   };
   const rect = (w, h) => `<Section N="Geometry" IX="0"><Cell N="NoFill" V="0"/><Cell N="NoLine" V="0"/><Cell N="NoShow" V="0"/><Cell N="NoSnap" V="0"/><Cell N="NoQuickDrag" V="0"/><Row T="MoveTo" IX="1"><Cell N="X" V="0" F="Width*0"/><Cell N="Y" V="0" F="Height*0"/></Row><Row T="LineTo" IX="2"><Cell N="X" V="${f(w)}" F="Width*1"/><Cell N="Y" V="0" F="Height*0"/></Row><Row T="LineTo" IX="3"><Cell N="X" V="${f(w)}" F="Width*1"/><Cell N="Y" V="${f(h)}" F="Height*1"/></Row><Row T="LineTo" IX="4"><Cell N="X" V="0" F="Width*0"/><Cell N="Y" V="${f(h)}" F="Height*1"/></Row><Row T="LineTo" IX="5"><Cell N="X" V="0" F="Geometry1.X1"/><Cell N="Y" V="0" F="Geometry1.Y1"/></Row></Section>`;
   let conns = '', nodes = '', connects = '';
@@ -1873,7 +2499,7 @@ function exportVSDX(an) {
   });
   g.nodes.forEach(I => {
     const s = I.style, w = IN(I.w), h = IN(I.h), sid = ids.get(I.id);
-    const label = I.n.label || '(sans libellé)', meta = metaOf(I.n, an);
+    const label = I.n.label ? T(I.n.label) : T('(sans libellé)'), meta = metaOf(I.n, an);
     nodes += `<Shape ID="${sid}" NameU="Element.${sid}" Name="${xesc(I.num || 'Element.' + sid)}" Type="Shape" LineStyle="0" FillStyle="0" TextStyle="0">`
       + cellv('PinX', f(IN(I.x + I.w / 2))) + cellv('PinY', f(Y(I.y + I.h / 2))) + cellv('Width', f(w)) + cellv('Height', f(h))
       + cellv('LocPinX', f(w / 2), ' F="Width*0.5"') + cellv('LocPinY', f(h / 2), ' F="Height*0.5"') + cellv('Angle', '0') + cellv('FlipX', '0') + cellv('FlipY', '0') + cellv('ResizeMode', '0')
@@ -1894,10 +2520,10 @@ function exportVSDX(an) {
     + cellv('LinePattern', '0') + cellv('FillPattern', '0') + cellv('VerticalAlign', '1') + cellv('LeftMargin', '0', ' U="IN"')
     + `<Section N="Character"><Row IX="0">${cellv('Font', 'Arial')}${cellv('Color', '#1F2933')}${cellv('Style', '1')}${cellv('Size', f(11.5 / 72), ' U="PT"')}</Row><Row IX="1">${cellv('Font', 'Arial')}${cellv('Color', '#5F6B7A')}${cellv('Style', '0')}${cellv('Size', f(8.5 / 72), ' U="PT"')}</Row></Section>`
     + `<Section N="Paragraph"><Row IX="0">${cellv('HorzAlign', '0')}</Row></Section>`
-    + `<Text><cp IX="0"/>${xesc(an.numero + '   ' + an.titre)}\n<cp IX="1"/>${xesc(['Arbre des causes', fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</Text></Shape>`;
+    + `<Text><cp IX="0"/>${xesc(an.numero + '   ' + an.titre)}\n<cp IX="1"/>${xesc([T('Arbre des causes'), fmtDate(an.date), an.site, an.processus].filter(Boolean).join(', '))}</Text></Shape>`;
   const VNS = 'xmlns="http://schemas.microsoft.com/office/visio/2012/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xml:space="preserve"';
   const page = XML + `<PageContents ${VNS}><Shapes>${title}${conns}${nodes}</Shapes>${connects ? `<Connects>${connects}</Connects>` : ''}</PageContents>`;
-  const pages = XML + `<Pages ${VNS}><Page ID="0" NameU="Arbre des causes" Name="Arbre des causes" ViewScale="-1" ViewCenterX="${f(PW / 2)}" ViewCenterY="${f(PH / 2)}"><PageSheet LineStyle="0" FillStyle="0" TextStyle="0">${cellv('PageWidth', f(PW), ' U="IN"')}${cellv('PageHeight', f(PH), ' U="IN"')}${cellv('ShdwOffsetX', '0.125')}${cellv('ShdwOffsetY', '-0.125')}${cellv('PageScale', '1', ' U="IN_F"')}${cellv('DrawingScale', '1', ' U="IN_F"')}${cellv('DrawingSizeType', '0')}${cellv('DrawingScaleType', '0')}${cellv('InhibitSnap', '0')}${cellv('PageLockReplace', '0', ' U="BOOL"')}${cellv('PageLockDuplicate', '0', ' U="BOOL"')}${cellv('UIVisibility', '0')}${cellv('ShdwType', '0')}${cellv('ShdwObliqueAngle', '0')}${cellv('ShdwScaleFactor', '1')}${cellv('DrawingResizeType', '1')}${cellv('PageShapeSplit', '1')}${cellv('RouteStyle', g.orient === 'bas' ? '6' : '7')}${cellv('LineJumpStyle', '0')}</PageSheet><Rel r:id="rId1"/></Page></Pages>`;
+  const pages = XML + `<Pages ${VNS}><Page ID="0" NameU="${xesc(T('Arbre des causes'))}" Name="${xesc(T('Arbre des causes'))}" ViewScale="-1" ViewCenterX="${f(PW / 2)}" ViewCenterY="${f(PH / 2)}"><PageSheet LineStyle="0" FillStyle="0" TextStyle="0">${cellv('PageWidth', f(PW), ' U="IN"')}${cellv('PageHeight', f(PH), ' U="IN"')}${cellv('ShdwOffsetX', '0.125')}${cellv('ShdwOffsetY', '-0.125')}${cellv('PageScale', '1', ' U="IN_F"')}${cellv('DrawingScale', '1', ' U="IN_F"')}${cellv('DrawingSizeType', '0')}${cellv('DrawingScaleType', '0')}${cellv('InhibitSnap', '0')}${cellv('PageLockReplace', '0', ' U="BOOL"')}${cellv('PageLockDuplicate', '0', ' U="BOOL"')}${cellv('UIVisibility', '0')}${cellv('ShdwType', '0')}${cellv('ShdwObliqueAngle', '0')}${cellv('ShdwScaleFactor', '1')}${cellv('DrawingResizeType', '1')}${cellv('PageShapeSplit', '1')}${cellv('RouteStyle', g.orient === 'bas' ? '6' : '7')}${cellv('LineJumpStyle', '0')}</PageSheet><Rel r:id="rId1"/></Page></Pages>`;
   const charCells = `<Section N="Character"><Row IX="0">${cellv('Font', 'Arial')}${cellv('Color', '0')}${cellv('Style', '0')}${cellv('Case', '0')}${cellv('Pos', '0')}${cellv('FontScale', '1')}${cellv('Size', '0.1388888888888889')}${cellv('DblUnderline', '0')}${cellv('Overline', '0')}${cellv('Strikethru', '0')}${cellv('Letterspace', '0')}${cellv('ColorTrans', '0')}</Row></Section>`;
   const paraCells = `<Section N="Paragraph"><Row IX="0">${cellv('IndFirst', '0')}${cellv('IndLeft', '0')}${cellv('IndRight', '0')}${cellv('SpLine', '-1.2')}${cellv('SpBefore', '0')}${cellv('SpAfter', '0')}${cellv('HorzAlign', '1')}${cellv('Bullet', '0')}${cellv('BulletStr', '')}</Row></Section>`;
   const styleSheet = `<StyleSheet ID="0" NameU="No Style" IsCustomNameU="1" Name="No Style" IsCustomName="1">${cellv('EnableLineProps', '1')}${cellv('EnableFillProps', '1')}${cellv('EnableTextProps', '1')}${cellv('HideForApply', '0')}${cellv('LineWeight', '0.01041666666666667')}${cellv('LineColor', '0')}${cellv('LinePattern', '1')}${cellv('Rounding', '0')}${cellv('EndArrowSize', '2')}${cellv('BeginArrow', '0')}${cellv('EndArrow', '0')}${cellv('LineCap', '0')}${cellv('BeginArrowSize', '2')}${cellv('LineColorTrans', '0')}${cellv('CompoundType', '0')}${cellv('FillForegnd', '1')}${cellv('FillBkgnd', '0')}${cellv('FillPattern', '1')}${cellv('ShdwForegnd', '0')}${cellv('ShdwPattern', '0')}${cellv('FillForegndTrans', '0')}${cellv('FillBkgndTrans', '0')}${cellv('ShdwForegndTrans', '0')}${cellv('LeftMargin', '0')}${cellv('RightMargin', '0')}${cellv('TopMargin', '0')}${cellv('BottomMargin', '0')}${cellv('VerticalAlign', '1')}${cellv('DefaultTabStop', '0.5')}${cellv('TextDirection', '0')}${cellv('TextBkgndTrans', '0')}${cellv('LockWidth', '0')}${cellv('LockHeight', '0')}${cellv('LockMoveX', '0')}${cellv('LockMoveY', '0')}${cellv('LockAspect', '0')}${cellv('LockDelete', '0')}${cellv('LockBegin', '0')}${cellv('LockEnd', '0')}${cellv('LockRotate', '0')}${cellv('LockCrop', '0')}${cellv('LockVtxEdit', '0')}${cellv('LockTextEdit', '0')}${cellv('LockFormat', '0')}${cellv('LockGroup', '0')}${cellv('LockCalcWH', '0')}${cellv('LockSelect', '0')}${cellv('LockCustProp', '0')}${cellv('NoObjHandles', '0')}${cellv('NonPrinting', '0')}${cellv('NoCtlHandles', '0')}${cellv('NoAlignBox', '0')}${cellv('UpdateAlignBox', '0')}${cellv('HideText', '0')}${cellv('DynFeedback', '0')}${cellv('GlueType', '0')}${cellv('WalkPreference', '0')}${cellv('BegTrigger', '0', ' F="No Formula"')}${cellv('EndTrigger', '0', ' F="No Formula"')}${cellv('ObjType', '0')}${cellv('Comment', '')}${cellv('IsDropSource', '0')}${cellv('NoLiveDynamics', '0')}${cellv('LocalizeMerge', '0')}${cellv('NoProofing', '0')}${cellv('Calendar', '0')}${cellv('LangID', 'fr-FR')}${cellv('ShapeKeywords', '')}${cellv('DropOnPageScale', '1')}${charCells}${paraCells}</StyleSheet>`;
@@ -1940,7 +2566,7 @@ function makeXLSX(sheets) {
   const files = [
     { name: '[Content_Types].xml', data: XML + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
     { name: '_rels/.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
-    { name: 'xl/workbook.xml', data: XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${xesc(safe(s.name))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>` },
+    { name: 'xl/workbook.xml', data: XML + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((s, i) => `<sheet name="${xesc(safe(T(s.name)))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>` },
     { name: 'xl/_rels/workbook.xml.rels', data: XML + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
     { name: 'xl/styles.xml', data: XML + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9DEE4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFC3C9D1"/></left><right style="thin"><color rgb="FFC3C9D1"/></right><top style="thin"><color rgb="FFC3C9D1"/></top><bottom style="thin"><color rgb="FFC3C9D1"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
     ...sheets.map((s, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: sheetXml(s) })),

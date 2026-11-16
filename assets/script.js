@@ -9,6 +9,9 @@ if (document.body.hasAttribute('data-home')) {
 }
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/* labels written by this script follow the site language (assets/i18n.js) */
+const T = s => (window.I18N ? window.I18N.t(s) : s);
+
 /* ─── THEME TOGGLE ───────────────────────────────────────── */
 (() => {
   const toggle = document.querySelector('.theme-toggle');
@@ -20,11 +23,12 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
     root.setAttribute('data-theme', theme);
     if (toggle) {
       toggle.setAttribute('aria-pressed', String(theme === 'dark'));
-      toggle.setAttribute('aria-label', theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre');
+      toggle.setAttribute('aria-label', T(theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'));
     }
   };
 
   setTheme(root.getAttribute('data-theme') || 'light', false);
+  document.addEventListener('langchange', () => setTheme(root.getAttribute('data-theme') || 'light', false));
 
   if (toggle) {
     toggle.addEventListener('click', () => {
@@ -82,7 +86,7 @@ function updateExpandButtons() {
     const scope = btn.closest('section') || document;
     const scoped = [...scope.querySelectorAll('.project-row')];
     const allOpen = scoped.length > 0 && scoped.every(r => r.classList.contains('open'));
-    btn.textContent = allOpen ? 'Tout replier' : 'Tout déplier';
+    btn.textContent = T(allOpen ? 'Tout replier' : 'Tout déplier');
     btn.setAttribute('aria-expanded', String(allOpen));
   });
 }
@@ -109,6 +113,7 @@ const openFromHash = () => {
 };
 openFromHash();
 window.addEventListener('hashchange', openFromHash);
+document.addEventListener('langchange', updateExpandButtons);
 
 /* ─── ACTIVE NAV + SCROLL PROGRESS ───────────────────────── */
 const sections = [...document.querySelectorAll('main [id]')].filter(el => el.matches('section, .masthead'));
